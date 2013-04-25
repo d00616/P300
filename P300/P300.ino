@@ -93,6 +93,13 @@ void setup() {
        gas_sensors[i]=new GasSensor(gassensor_pins[i]);
     }
   #endif
+  #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
+    for (char i=0;i<SENSOR_HYT;i++)
+    {
+      hy_temp[SENSOR_HYT]=20;
+      hy_humidity[SENSOR_HYT]=40;
+    }
+  #endif
   
   // Initialize 1ms timer
   PITimer2.frequency(1000);
@@ -385,42 +392,40 @@ void readHYT(char address, double *temp, double *humidity)
     
     // Send Measurement Request
     Wire.beginTransmission(address);
-    Wire.send(0);
+    if (Wire.write(0)!=1)
+    {
+      // Not OK
+      Wire.endTransmission();
+      return;
+    }
     Wire.receive();
     Wire.endTransmission();
     
     // Read data
-    Wire.requestFrom(address, 4);
+    uint8_t l = Wire.requestFrom(address, 4);
+    if (l!=4) return;
     for (buffer_pos=0;buffer_pos<4;buffer_pos++)
     {
-      if (Wire.available()) buffer[buffer_pos]=Wire.read();
-        else buffer_pos=255;
+      buffer[buffer_pos]=Wire.read();
     }
-    if (buffer_pos<255)
-    {
-      // Check for answer
-      if ( (buffer[0]+buffer[1]+buffer[2]+buffer[3])>0)
-      {
-        // Calculate values
-        *temp = 165.0/pow(2,14)*(buffer[2] << 6 | (buffer[3] & 0x3F))-40;
-        *humidity = 100/pow(2,14)*((buffer[0]<<8 | buffer[1]) & 0X3FFF);
-      }
-        else
-      {
-        // Set dummy values
-        *temp = 20;
-        *humidity = 50;
-      }
-      #ifdef DEBUG
-        if(debug) p("D Read from HYT sensor %x temp=%f humidity=%f\r\n",address,*temp,*humidity);
-      #endif
-    }
-    #ifdef DEBUG
-      else if(debug)
-    {
-      p("D Error read from HYT sensor %x",address);
-    }
-    #endif
+   // Check for answer
+   if ( (buffer[0]+buffer[1]+buffer[2]+buffer[3])>0)
+   {
+      // Calculate values
+      *temp = 165.0/pow(2,14)*(buffer[2] << 6 | (buffer[3] & 0x3F))-40;
+      *humidity = 100/pow(2,14)*((buffer[0]<<8 | buffer[1]) & 0X3FFF);
+   }
+      else
+   {
+     #ifdef DEBUG
+     if(debug)
+     {
+       p("D Error read from HYT sensor %x",address);
+     }
+     #endif
+
+     return;
+   }
 }
 #endif
 
