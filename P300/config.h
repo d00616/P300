@@ -19,6 +19,12 @@
 // minimum time between sensor readings (16 bit!)
 #define SENSOR_TIMEOUT 3000
 
+// number of milliseconds for setup routine
+#define SETUP_TIMEOUT 5000
+
+// timeout for software watchdog
+#define WATCHDOG_TIMEOUT 2000
+
 // define I2C address when HYT-221 is installed
 #define SENSOR_HYT 1
 #ifdef SENSOR_HYT

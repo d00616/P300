@@ -18,6 +18,7 @@
 #ifdef DEBUG
   bool debug;
 #endif
+  bool setupfinished;
 
 
 ProxyObj proxy_rc;
@@ -32,6 +33,7 @@ bool  PcEol;
 // Idle Timer
 uint16_t idle_timer;
 uint16_t sensor_timeout;
+uint16_t watchdog_timer;
 
 // HYT-221 sensors
 #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
@@ -50,6 +52,11 @@ void p(char *fmt, ... ){
 }
 
 void setup() {
+  #ifdef LED_PIN
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, HIGH);
+  #endif
+  setupfinished=false;
   #ifdef DEBUG
     // default debug state
     debug=false;
@@ -83,6 +90,13 @@ void setup() {
   // Set Sensor timer
   sensor_timeout=SENSOR_TIMEOUT;
   
+  // Watchdog timer
+  watchdog_timer=0;
+
+  // Initialize 1ms timer with watchdog
+  PITimer2.frequency(1000);
+  PITimer2.start(timerCallbackMs);  
+
   // Initialize I2C Bus
   Wire.begin();
   
@@ -100,14 +114,13 @@ void setup() {
       hy_humidity[SENSOR_HYT]=40;
     }
   #endif
-  
-  // Initialize 1ms timer
-  PITimer2.frequency(1000);
-  PITimer2.start(timerCallbackMs);
-  
+
+
   #ifdef LED_PIN
-    pinMode(LED_PIN, OUTPUT);
+   digitalWrite(LED_PIN, LOW);
   #endif
+ 
+  setupfinished=true;
 }
 
 void cmd_ok()
@@ -124,7 +137,21 @@ void cmd_error(int n)
 void reset_to_bootloader()
 {
   cli();
-  (*(void(*)())0)();
+  delay(100);
+  _reboot_Teensyduino_();
+}
+
+// reboot function
+void reboot()
+{
+  #ifndef SCB_AIRCR_SYSRESETREQ_MASK
+    #define SCB_AIRCR_SYSRESETREQ_MASK ((unsigned int) 0x00000004)
+  #endif
+
+  cli();
+  delay(100);
+  SCB_AIRCR = 0x05FA0000 | SCB_AIRCR_SYSRESETREQ_MASK;
+  while(1);
 }
 
 
@@ -133,6 +160,9 @@ void loop()
    #ifdef LED_PIN
     digitalWrite(LED_PIN, HIGH);
    #endif
+   
+   // Reset software watchdog
+   watchdog_timer=0;
    
   /*********************************************************
    * Serial Proxy handling
@@ -263,6 +293,7 @@ void loop()
           "Commands:\r\n"
           "?\t\tHelp\r\n"
           "FLASH\t\tReboot to loader\r\n"
+          "REBOOT\t\tReboot this\r\n"
          );
         #ifdef DEBUG
           p("DEBUG\t0|1\tdisable|enable debug messages\r\n"); 
@@ -304,6 +335,14 @@ void loop()
       reset_to_bootloader();
     }
 
+    // Boot loader
+    if (strncmp(cmd,"REBOOT",6) == 0)
+    {
+      cmd_ok();
+      reboot();
+    }
+
+
     #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
      if (strncmp(cmd,"GETHT",5) == 0)
      {
@@ -341,7 +380,7 @@ void loop()
     PcEol=false;
   }
   
-  
+ 
   // Read Sensors
   if ( (idle_timer>IDLE_TIMEOUT) && ((sensor_timeout>=SENSOR_TIMEOUT)))
   {
@@ -367,13 +406,13 @@ void loop()
       #endif
     }
     #endif
+  
 
     #ifdef DEBUG
       if (debug) p("D End reading sensors %d\r\n",millis());
     #endif
     sensor_timeout=0;
   }
-  
   
    #ifdef LED_PIN
     digitalWrite(LED_PIN, LOW);
@@ -384,6 +423,16 @@ void loop()
 }
 
 #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
+#ifdef DEBUG
+void HYTerror(char address)
+{
+  if(debug)
+  {
+     p("D Error read from HYT sensor %x\r\n",address);
+  }
+}
+#endif
+
 void readHYT(char address, double *temp, double *humidity)
 {
     // Read 4 bytes from HYT sensor
@@ -394,6 +443,9 @@ void readHYT(char address, double *temp, double *humidity)
     Wire.beginTransmission(address);
     if (Wire.write(0)!=1)
     {
+      #ifdef DEBUG
+       HYTerror(address);
+      #endif
       // Not OK
       Wire.endTransmission();
       return;
@@ -403,7 +455,13 @@ void readHYT(char address, double *temp, double *humidity)
     
     // Read data
     uint8_t l = Wire.requestFrom(address, 4);
-    if (l!=4) return;
+    if (l!=4)
+    {
+      #ifdef DEBUG
+       HYTerror(address);
+      #endif
+      return;
+    }
     for (buffer_pos=0;buffer_pos<4;buffer_pos++)
     {
       buffer[buffer_pos]=Wire.read();
@@ -418,12 +476,8 @@ void readHYT(char address, double *temp, double *humidity)
       else
    {
      #ifdef DEBUG
-     if(debug)
-     {
-       p("D Error read from HYT sensor %x",address);
-     }
+      HYTerror(address);
      #endif
-
      return;
    }
 }
@@ -483,12 +537,29 @@ void addToProxyObj(ProxyObj *obj, uint8_t data, bool recieve_from_p300)
 }
 
 // 1ms second timer
-void timerCallbackMs() {
+void timerCallbackMs()
+{
   // Increment age of data
   if (proxy_rc.buffer_wpos>0) proxy_rc.age++;
   if ((proxy_pc.buffer_wpos>0) && (proxy_pc.buffer[0]==0x01)) proxy_pc.age++;
   if (proxy_intern.buffer_wpos>0) proxy_intern.age++;
   idle_timer++;
   if (sensor_timeout<=SENSOR_TIMEOUT) sensor_timeout++;
+  
+  // Software watchdog
+  watchdog_timer++;  
+  // reboot into program mode
+  if ((!setupfinished) && (watchdog_timer>SETUP_TIMEOUT))
+  {
+    reset_to_bootloader();
+  }
+  
+  // Software watchdog timeout
+  if ((setupfinished) && (watchdog_timer>WATCHDOG_TIMEOUT))
+  {
+    // Reset
+    reboot();
+  }
+
 }
 
