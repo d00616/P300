@@ -420,7 +420,7 @@ void loop()
     #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
     for (char num_sensor=0;num_sensor<SENSOR_HYT;num_sensor++)
     {
-//      readHYT(hy_addresses[num_sensor], &hy_temp[num_sensor], &hy_humidity[num_sensor]);
+      readHYT(hy_addresses[num_sensor], &hy_temp[num_sensor], &hy_humidity[num_sensor]);
     }
     #endif
     
@@ -460,8 +460,21 @@ void readHYT(char address, double *temp, double *humidity)
     
     // Send Measurement Request
     Wire.beginTransmission(address);
-    Wire.send(0);
-    Wire.receive();
+    if (Wire.write(0)!=1)
+    {
+      #ifdef DEBUG
+        if(debug) p("D Error writing to HYT sensor %x\r\n",address);
+      #endif
+      return;
+    }
+    if ( (!Wire.available()) || (Wire.receive()<0))
+    {
+      // Nothing received
+      #ifdef DEBUG
+        if(debug) p("D Error reading from HYT sensor %x\r\n",address);
+      #endif
+      return;
+    }
     Wire.endTransmission();
     
     // Read data
