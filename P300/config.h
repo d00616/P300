@@ -25,6 +25,9 @@
 // timeout for software watchdog
 #define WATCHDOG_TIMEOUT 2000
 
+// timeout for crash detection
+#define CRASH_DETECTION_TIMEOUT 10000
+
 // define I2C address when HYT-221 is installed
 #define SENSOR_HYT 1
 #ifdef SENSOR_HYT

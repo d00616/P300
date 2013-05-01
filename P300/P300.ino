@@ -441,7 +441,15 @@ void loop()
     #endif
     sensor_timeout=0;
   }
-  
+
+  // Crash detection, release EEPROM Value after 30 Seconds uptime
+  #ifdef EEPROM_CRASHDEDECTION
+  if ( (crashdedection==true) && (millis()>CRASH_DETECTION_TIMEOUT))
+  {
+    if (EEPROM.read(EEPROM_CRASHDEDECTION)<255) EEPROM.write(EEPROM_CRASHDEDECTION,255);
+    crashdedection=false;
+  }
+  #endif  
   
    #ifdef LED_PIN
     digitalWrite(LED_PIN, LOW);
