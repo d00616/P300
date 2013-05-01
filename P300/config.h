@@ -38,6 +38,10 @@
   GasSensor* gas_sensors[SENSOR_GAS];
 #endif
 
+// Blink codes
+#define BLINK_SETUP_FAIL 2
+#define BLINK_SETUP_FAIL_TIMEOUT 3
+#define BLINK_SOFTWARE_WATCHDOG 4
 
 // Commands
 #define COMMAND_DELIMITER " "
@@ -48,6 +52,10 @@
 #define SERIAL_RC   Serial1
 
 #define SERIAL_BUFFER_SIZE  64
+
+// EEPROM-MAP
+#define EEPROM_CRASHDEDECTION 0
+
 
 // Data
 struct ProxyObj

@@ -11,6 +11,8 @@
 #include "config.h"
 #include <stdarg.h>
 #include <Wire.h>
+#include <EEPROM.h>
+
 
 // https://github.com/loglow/PITimer.git
 #include "PITimer.h"
@@ -19,6 +21,9 @@
   bool debug;
 #endif
   bool setupfinished;
+#ifdef EEPROM_CRASHDEDECTION
+  bool crashdedection;
+#endif
 
 
 ProxyObj proxy_rc;
@@ -56,7 +61,23 @@ void setup() {
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, HIGH);
   #endif
+    
+  // Crash -> reboot to boot loader
+  #ifdef EEPROM_CRASHDEDECTION
+  if (EEPROM.read(EEPROM_CRASHDEDECTION)<255)
+  {
+    #ifdef LED_PIN
+     blink(BLINK_SETUP_FAIL);
+    #endif
+    EEPROM.write(EEPROM_CRASHDEDECTION,255);
+    reset_to_bootloader();
+  }
+  EEPROM.write(EEPROM_CRASHDEDECTION,0);
+  crashdedection=true;
+  #endif
+
   setupfinished=false;
+
   #ifdef DEBUG
     // default debug state
     debug=false;
@@ -66,8 +87,7 @@ void setup() {
   SERIAL_PC.begin(PC_BAUD_RATE);
   SERIAL_P300.begin(P300_BAUD_RATE);
   SERIAL_RC.begin(P300_BAUD_RATE);
-  
-  
+
   // Reset Proxy Objects
   resetProxyObj(&proxy_rc);
   resetProxyObj(&proxy_pc);
@@ -107,19 +127,11 @@ void setup() {
        gas_sensors[i]=new GasSensor(gassensor_pins[i]);
     }
   #endif
-  #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
-    for (char i=0;i<SENSOR_HYT;i++)
-    {
-      hy_temp[SENSOR_HYT]=20;
-      hy_humidity[SENSOR_HYT]=40;
-    }
-  #endif
-
-
+  
   #ifdef LED_PIN
-   digitalWrite(LED_PIN, LOW);
+    digitalWrite(LED_PIN, LOW);
   #endif
- 
+  
   setupfinished=true;
 }
 
@@ -136,6 +148,10 @@ void cmd_error(int n)
 // Reset function
 void reset_to_bootloader()
 {
+  #ifdef LED_PIN
+   digitalWrite(LED_PIN, LOW);
+  #endif
+
   cli();
   delay(100);
   _reboot_Teensyduino_();
@@ -148,20 +164,42 @@ void reboot()
     #define SCB_AIRCR_SYSRESETREQ_MASK ((unsigned int) 0x00000004)
   #endif
 
+  #ifdef LED_PIN
+   digitalWrite(LED_PIN, LOW);
+  #endif
+
   cli();
   delay(100);
   SCB_AIRCR = 0x05FA0000 | SCB_AIRCR_SYSRESETREQ_MASK;
   while(1);
 }
 
+#ifdef LED_PIN
+void blink(char n)
+{
+  for (char i=0;i<30;i++)
+  {
+   digitalWrite(LED_PIN, HIGH);
+   delay(40);
+   digitalWrite(LED_PIN, LOW);
+   delay(40);
+  }
+  delay(500);
+  for (char i=0;i<n;i++)
+  {
+   digitalWrite(LED_PIN, HIGH);
+   delay(500);
+   digitalWrite(LED_PIN, LOW);
+   delay(500);
+  }
+}
+#endif
 
 void loop()
 {
    #ifdef LED_PIN
     digitalWrite(LED_PIN, HIGH);
    #endif
-   
-   // Reset software watchdog
    watchdog_timer=0;
    
   /*********************************************************
@@ -293,7 +331,6 @@ void loop()
           "Commands:\r\n"
           "?\t\tHelp\r\n"
           "FLASH\t\tReboot to loader\r\n"
-          "REBOOT\t\tReboot this\r\n"
          );
         #ifdef DEBUG
           p("DEBUG\t0|1\tdisable|enable debug messages\r\n"); 
@@ -335,14 +372,6 @@ void loop()
       reset_to_bootloader();
     }
 
-    // Boot loader
-    if (strncmp(cmd,"REBOOT",6) == 0)
-    {
-      cmd_ok();
-      reboot();
-    }
-
-
     #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
      if (strncmp(cmd,"GETHT",5) == 0)
      {
@@ -380,7 +409,7 @@ void loop()
     PcEol=false;
   }
   
- 
+  
   // Read Sensors
   if ( (idle_timer>IDLE_TIMEOUT) && ((sensor_timeout>=SENSOR_TIMEOUT)))
   {
@@ -391,7 +420,7 @@ void loop()
     #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
     for (char num_sensor=0;num_sensor<SENSOR_HYT;num_sensor++)
     {
-      readHYT(hy_addresses[num_sensor], &hy_temp[num_sensor], &hy_humidity[num_sensor]);
+//      readHYT(hy_addresses[num_sensor], &hy_temp[num_sensor], &hy_humidity[num_sensor]);
     }
     #endif
     
@@ -406,13 +435,13 @@ void loop()
       #endif
     }
     #endif
-  
 
     #ifdef DEBUG
       if (debug) p("D End reading sensors %d\r\n",millis());
     #endif
     sensor_timeout=0;
   }
+  
   
    #ifdef LED_PIN
     digitalWrite(LED_PIN, LOW);
@@ -423,16 +452,6 @@ void loop()
 }
 
 #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
-#ifdef DEBUG
-void HYTerror(char address)
-{
-  if(debug)
-  {
-     p("D Error read from HYT sensor %x\r\n",address);
-  }
-}
-#endif
-
 void readHYT(char address, double *temp, double *humidity)
 {
     // Read 4 bytes from HYT sensor
@@ -441,45 +460,42 @@ void readHYT(char address, double *temp, double *humidity)
     
     // Send Measurement Request
     Wire.beginTransmission(address);
-    if (Wire.write(0)!=1)
-    {
-      #ifdef DEBUG
-       HYTerror(address);
-      #endif
-      // Not OK
-      Wire.endTransmission();
-      return;
-    }
+    Wire.send(0);
     Wire.receive();
     Wire.endTransmission();
     
     // Read data
-    uint8_t l = Wire.requestFrom(address, 4);
-    if (l!=4)
-    {
-      #ifdef DEBUG
-       HYTerror(address);
-      #endif
-      return;
-    }
+    Wire.requestFrom(address, 4);
     for (buffer_pos=0;buffer_pos<4;buffer_pos++)
     {
-      buffer[buffer_pos]=Wire.read();
+      if (Wire.available()) buffer[buffer_pos]=Wire.read();
+        else buffer_pos=255;
     }
-   // Check for answer
-   if ( (buffer[0]+buffer[1]+buffer[2]+buffer[3])>0)
-   {
-      // Calculate values
-      *temp = 165.0/pow(2,14)*(buffer[2] << 6 | (buffer[3] & 0x3F))-40;
-      *humidity = 100/pow(2,14)*((buffer[0]<<8 | buffer[1]) & 0X3FFF);
-   }
-      else
-   {
-     #ifdef DEBUG
-      HYTerror(address);
-     #endif
-     return;
-   }
+    if (buffer_pos<255)
+    {
+      // Check for answer
+      if ( (buffer[0]+buffer[1]+buffer[2]+buffer[3])>0)
+      {
+        // Calculate values
+        *temp = 165.0/pow(2,14)*(buffer[2] << 6 | (buffer[3] & 0x3F))-40;
+        *humidity = 100/pow(2,14)*((buffer[0]<<8 | buffer[1]) & 0X3FFF);
+      }
+        else
+      {
+        // Set dummy values
+        *temp = 20;
+        *humidity = 50;
+      }
+      #ifdef DEBUG
+        if(debug) p("D Read from HYT sensor %x temp=%f humidity=%f\r\n",address,*temp,*humidity);
+      #endif
+    }
+    #ifdef DEBUG
+      else if(debug)
+    {
+      p("D Error read from HYT sensor %x",address);
+    }
+    #endif
 }
 #endif
 
@@ -537,8 +553,7 @@ void addToProxyObj(ProxyObj *obj, uint8_t data, bool recieve_from_p300)
 }
 
 // 1ms second timer
-void timerCallbackMs()
-{
+void timerCallbackMs() {
   // Increment age of data
   if (proxy_rc.buffer_wpos>0) proxy_rc.age++;
   if ((proxy_pc.buffer_wpos>0) && (proxy_pc.buffer[0]==0x01)) proxy_pc.age++;
@@ -551,15 +566,22 @@ void timerCallbackMs()
   // reboot into program mode
   if ((!setupfinished) && (watchdog_timer>SETUP_TIMEOUT))
   {
+    #ifdef LED_PIN
+    cli();
+    blink(BLINK_SETUP_FAIL_TIMEOUT);
+    #endif
     reset_to_bootloader();
   }
   
   // Software watchdog timeout
   if ((setupfinished) && (watchdog_timer>WATCHDOG_TIMEOUT))
   {
+    #ifdef LED_PIN
+    cli();
+    blink(BLINK_SOFTWARE_WATCHDOG);
+    #endif
     // Reset
     reboot();
   }
-
 }
 
