@@ -15,9 +15,12 @@ ANLAGE HABEN.
 Nachbau
 =======
 
-Die Hardware ist im Verzeichnis „Hardware“ dokumentiert. Die Platine mit den
-Sensoren ist optional. Wenn die Sensoren nicht beschaltet werden müssen
-diese aus der Konfiguration der Software entfernt werden.
+Die Hardware ist im Verzeichnis „Hardware“ dokumentiert. Die Platinen auf den
+Fotos haben die richtigen Maße. Die Zeichnung dient nur der Dokumentation der
+Beschaltung und Bestückung.
+
+Die Sensorplatine kann weggelassen werden. Beim Einbau der Sensorplatine ist
+die Rückseite mit einem Blatt Papier zu isolieren.
 
 Software
 ========
