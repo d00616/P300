@@ -72,8 +72,17 @@ void setup() {
     EEPROM.write(EEPROM_CRASHDEDECTION,255);
     reset_to_bootloader();
   }
-  EEPROM.write(EEPROM_CRASHDEDECTION,0);
-  crashdedection=true;
+  // Don't reboot after flashing new firmware
+  if (EEPROM.read(EEPROM_NEWFIRMWARE)<255)
+  {
+    EEPROM.write(EEPROM_CRASHDEDECTION,0);
+    crashdedection=true;
+  }
+    else
+  {
+    EEPROM.write(EEPROM_NEWFIRMWARE,0);
+    crashdedection=false;
+  }
   #endif
 
   setupfinished=false;
@@ -475,6 +484,7 @@ void readHYT(char address, double *temp, double *humidity)
       #endif
       return;
     }
+    /*
     if ( (!Wire.available()) || (Wire.receive()<0))
     {
       // Nothing received
@@ -483,6 +493,7 @@ void readHYT(char address, double *temp, double *humidity)
       #endif
       return;
     }
+    */
     Wire.endTransmission();
     
     // Read data
