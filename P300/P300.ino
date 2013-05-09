@@ -48,10 +48,10 @@ uint16_t watchdog_timer;
 
 // http://playground.arduino.cc/Main/Printf
 void p(char *fmt, ... ){
-        char tmp[256]; // resulting string limited to 128 chars
+        char tmp[512]; // resulting string limited to 512 chars
         va_list args;
         va_start (args, fmt );
-        vsnprintf(tmp, 128, fmt, args);
+        vsnprintf(tmp, sizeof(tmp), fmt, args);
         va_end (args);
         Serial.print(tmp);
 }
@@ -340,9 +340,13 @@ void loop()
           "Commands:\r\n"
           "?\t\tHelp\r\n"
           "FLASH\t\tReboot to loader\r\n"
+          "RESET\t\tReboot to application\r\n"
          );
         #ifdef DEBUG
-          p("DEBUG\t0|1\tdisable|enable debug messages\r\n"); 
+          p(
+            "DEBUG\t0|1\tdisable|enable debug messages\r\n"
+            "VARS\t\tDump internal variables\r\n"
+          ); 
         #endif
         #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
          p("GETHT\tNUM\tRead external HYT-221 sensor NUM\r\n");
@@ -372,6 +376,37 @@ void loop()
         cmd_error(ERR_PARAMETER_VALUE);
        }
      }
+     if (strncmp(cmd,"VARS",4) == 0)
+     {
+         p(
+           "uptime=%ds\r\n"
+           "proxy_source=%s\r\n"
+           "proxy_rc.wpos rpos age=%d %d %d\r\n"
+           "rc.available=%d\r\n"
+           "p300.available=%d\r\n"
+           "idle_timer=%d\r\n"
+           "sensor_timeout=%d\r\n"
+           "watchdog_timer=%d\r\n"
+           #ifdef EEPROM_CRASHDEDECTION
+             "crashdedection=%d\r\n"
+             "newfirmware=%d\r\n"
+           #endif
+
+           ,millis()/1000,
+           (proxy_source==NULL)?"NULL":proxy_source->name,
+           proxy_rc.buffer_wpos,proxy_rc.buffer_rpos,proxy_rc.age,
+           SERIAL_RC.available(),
+           SERIAL_P300.available(),
+           idle_timer,
+           sensor_timeout,
+           watchdog_timer,
+           #ifdef EEPROM_CRASHDEDECTION
+             EEPROM.read(EEPROM_CRASHDEDECTION),
+             EEPROM.read(EEPROM_NEWFIRMWARE)
+           #endif
+         );
+         cmd_ok();
+     }
     #endif
 
     // Boot loader
@@ -379,6 +414,13 @@ void loop()
     {
       cmd_ok();
       reset_to_bootloader();
+    }
+
+    // Boot loader
+    if (strncmp(cmd,"RESET",5) == 0)
+    {
+      cmd_ok();
+      reboot();
     }
 
     #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
@@ -412,7 +454,6 @@ void loop()
        }
      }
     #endif
-
 
     resetProxyObj(&proxy_pc);
     PcEol=false;
@@ -484,16 +525,6 @@ void readHYT(char address, double *temp, double *humidity)
       #endif
       return;
     }
-    /*
-    if ( (!Wire.available()) || (Wire.receive()<0))
-    {
-      // Nothing received
-      #ifdef DEBUG
-        if(debug) p("D Error reading from HYT sensor %x\r\n",address);
-      #endif
-      return;
-    }
-    */
     Wire.endTransmission();
     
     // Read data
