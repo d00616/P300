@@ -4,6 +4,7 @@
 
 // Debugging
 #define DEBUG  1
+#define SQLMODE 1
 #define LED_PIN 13
 
 #define P300_BAUD_RATE 4800

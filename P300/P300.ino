@@ -24,7 +24,10 @@
 #ifdef EEPROM_CRASHDEDECTION
   bool crashdedection;
 #endif
-
+#ifdef SQLMODE
+  bool sqldump;
+  char sqlvar[128],sqlval[128];
+#endif
 
 ProxyObj proxy_rc;
 ProxyObj proxy_pc;
@@ -91,6 +94,12 @@ void setup() {
     // default debug state
     debug=false;
   #endif
+  #ifdef SQLMODE
+    sqldump=false;
+    sqlvar[0]=0;
+    sqlval[0]=0;
+  #endif
+
 
   // Setup serial ports
   SERIAL_PC.begin(PC_BAUD_RATE);
@@ -203,6 +212,28 @@ void blink(char n)
   }
 }
 #endif
+
+#ifdef SQLMODE
+// add variable to sql statement
+bool addtosql(char *var, unsigned int val)
+{
+  char comma[2]={',',0};
+  int l=strlen(var)+strlen(sqlvar);
+  if (l>=sizeof(sqlvar)) return false;
+  if (sqlvar[0]!=0) strcat(sqlvar,comma);
+  strcat(sqlvar,var);
+  
+  char valstr[16];
+  itoa(val,valstr,10);
+  l=strlen(valstr)+strlen(sqlval);
+  if (l>=sizeof(sqlval)) return false;
+  if (sqlval[0]!=0) strcat(sqlval,comma);
+  strcat(sqlval,valstr);
+  
+  return true;
+}
+#endif
+
 
 void loop()
 {
@@ -348,6 +379,11 @@ void loop()
             "VARS\t\tDump internal variables\r\n"
           ); 
         #endif
+        #ifdef SQLMODE
+          p(
+            "SQLDUMP\t0|1Dump sensor readings as SQL statement\r\n"
+          );
+        #endif
         #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
          p("GETHT\tNUM\tRead external HYT-221 sensor NUM\r\n");
         #endif
@@ -408,6 +444,26 @@ void loop()
          cmd_ok();
      }
     #endif
+    #ifdef SQLMODE
+     if (strncmp(cmd,"SQLDUMP",7) == 0)
+     {
+       if (arg1[0]=='0')
+       {
+         sqldump=false;
+         cmd_ok();
+       }
+         else
+       if (arg1[0]=='1')
+       {
+         sqldump=true;
+         cmd_ok();
+       }
+         else
+       {
+        cmd_error(ERR_PARAMETER_VALUE);
+       }
+     }
+    #endif
 
     // Boot loader
     if (strncmp(cmd,"FLASH",5) == 0)
@@ -466,28 +522,54 @@ void loop()
     #ifdef DEBUG
       if (debug) p("D Start reading sensors %d\r\n",millis());
     #endif
+    #ifdef SQLMODE
+      if (sqldump)
+      {
+        sqlvar[0]=0;
+        sqlval[0]=0;
+        addtosql("uptime",millis());
+      }
+    #endif
     
     #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
     for (char num_sensor=0;num_sensor<SENSOR_HYT;num_sensor++)
     {
       readHYT(hy_addresses[num_sensor], &hy_temp[num_sensor], &hy_humidity[num_sensor]);
+      #ifdef SQLMODE
+        if (sqldump)
+        {
+          char temp[6]={'t','e','m','p',num_sensor+'1'};
+          char hum[5]={'h','u','m',num_sensor+'1'};
+          addtosql(temp,hy_temp[num_sensor]);
+          addtosql(hum,hy_humidity[num_sensor]);
+        }
+      #endif
     }
     #endif
     
     #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
     for (char i=0;i<SENSOR_GAS;i++)
     {
+      uint16_t gasval = gas_sensors[i]->loopAction();
       #ifdef DEBUG
-       if (debug) p("D gas sensor %d=%d\r\n",i,gas_sensors[i]->loopAction());
-         else gas_sensors[i]->loopAction();
-      #else
-       gas_sensors[i]->loopAction();
+       if (debug) p("D gas sensor %d=%d\r\n",i,gasval);
       #endif
+      #ifdef SQLMODE
+        if (sqldump)
+        {
+          char gasname[5]={'g','a','s',i+'1'};
+          addtosql(gasname,gasval);
+        }
+    #endif
+
     }
     #endif
 
     #ifdef DEBUG
       if (debug) p("D End reading sensors %d\r\n",millis());
+    #endif
+    #ifdef SQLMODE
+      if (sqldump) p("insert into p300dump(%s) values(%s);\r\n",sqlvar,sqlval);
     #endif
     sensor_timeout=0;
   }
