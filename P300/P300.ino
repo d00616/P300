@@ -614,9 +614,9 @@ void readHYT(char address, double *temp, double *humidity)
     for (buffer_pos=0;buffer_pos<4;buffer_pos++)
     {
       if (Wire.available()) buffer[buffer_pos]=Wire.read();
-        else buffer_pos=255;
+        else break;
     }
-    if (buffer_pos<255)
+    if (buffer_pos==4)
     {
       // Check for answer
       if ( (buffer[0]+buffer[1]+buffer[2]+buffer[3])>0)
