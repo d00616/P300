@@ -25,7 +25,7 @@ die Rückseite mit einem Blatt Papier zu isolieren.
 Software
 ========
 
-Die Software wurde mit Arduino 1.0.4/Teensyduino 1.13  erstellt.
+Die Software wurde mit Arduino 1.0.5/Teensyduino 1.15  erstellt.
 http://www.pjrc.com/teensy/td_download.html Das Verzeichnis „P300“ muss in
 das Sketch-Verzeichnis der Arduino Umgebung kopiert werden.
 

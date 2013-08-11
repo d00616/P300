@@ -12,10 +12,7 @@
 #include <stdarg.h>
 #include <Wire.h>
 #include <EEPROM.h>
-
-
-// https://github.com/loglow/PITimer.git
-#include "PITimer.h"
+#include <IntervalTimer.h>
 
 #ifdef DEBUG
   bool debug;
@@ -39,6 +36,7 @@ ProxyObj* proxy_source;
 bool  PcEol;
 
 // Idle Timer
+IntervalTimer Timer_ms;
 uint16_t idle_timer;
 uint16_t sensor_timeout;
 uint16_t watchdog_timer;
@@ -132,8 +130,7 @@ void setup() {
   watchdog_timer=0;
 
   // Initialize 1ms timer with watchdog
-  PITimer2.frequency(1000);
-  PITimer2.start(timerCallbackMs);  
+  Timer_ms.begin(timerCallbackMs, 1000);
 
   // Initialize I2C Bus
   Wire.begin();
