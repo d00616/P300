@@ -36,6 +36,7 @@
 #endif
 
 // define analog pins for GAS Sensors
+// Any gas sensor must be installed near HYT sensor with same index number!
 #define SENSOR_GAS 1
 #ifdef SENSOR_GAS
   static int gassensor_pins[SENSOR_GAS]={14};

@@ -139,7 +139,7 @@ void setup() {
   #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
     for (char i=0;i<SENSOR_GAS;i++)
     {
-       gas_sensors[i]=new GasSensor(gassensor_pins[i]);
+       gas_sensors[i]=new GasSensor(i, gassensor_pins[i]);
     }
   #endif
   
@@ -547,7 +547,7 @@ void loop()
     #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
     for (char i=0;i<SENSOR_GAS;i++)
     {
-      uint16_t gasval = gas_sensors[i]->loopAction();
+      uint16_t gasval = gas_sensors[i]->loopAction((char)hy_temp[i],(char)hy_humidity[i]);
       #ifdef DEBUG
        if (debug) p("D gas sensor %d=%d\r\n",i,gasval);
       #endif
