@@ -13,6 +13,7 @@
 #include <Wire.h>
 #include <EEPROM.h>
 #include <IntervalTimer.h>
+#include "bitlash.h"
 
 #ifdef DEBUG
   bool debug;
@@ -21,19 +22,11 @@
 #ifdef EEPROM_CRASHDEDECTION
   bool crashdedection;
 #endif
-#ifdef SQLMODE
-  bool sqldump;
-  char sqlvar[128],sqlval[128];
-#endif
 
 ProxyObj proxy_rc;
-ProxyObj proxy_pc;
 ProxyObj proxy_intern;
 
 ProxyObj* proxy_source;
-
-// End of line
-bool  PcEol;
 
 // Idle Timer
 IntervalTimer Timer_ms;
@@ -92,33 +85,21 @@ void setup() {
     // default debug state
     debug=false;
   #endif
-  #ifdef SQLMODE
-    sqldump=false;
-    sqlvar[0]=0;
-    sqlval[0]=0;
-  #endif
-
 
   // Setup serial ports
-  SERIAL_PC.begin(PC_BAUD_RATE);
   SERIAL_P300.begin(P300_BAUD_RATE);
   SERIAL_RC.begin(P300_BAUD_RATE);
 
   // Reset Proxy Objects
   resetProxyObj(&proxy_rc);
-  resetProxyObj(&proxy_pc);
   resetProxyObj(&proxy_intern);
   #ifdef DEBUG
     proxy_rc.name    ="RC ";
-    proxy_pc.name    ="PC ";
     proxy_intern.name="INT";
   #endif
 
   // Define proxy_source
   proxy_source=NULL;
-  
-  // Reset PcEol;
-  PcEol = false;
   
   // Set Idle timer
   idle_timer=IDLE_TIMEOUT;
@@ -143,6 +124,20 @@ void setup() {
     }
   #endif
   
+  // initialize bitlash and set primary serial port baud
+  // print startup banner and run the startup macro
+  initBitlash(PC_BAUD_RATE);
+  // Bitlash function
+  addBitlashFunction("p300help", (bitlash_function) cmd_p300help);
+  addBitlashFunction("sensor", (bitlash_function) cmd_sensor);
+  addBitlashFunction("clock", (bitlash_function) cmd_clock);
+  addBitlashFunction("modbus", (bitlash_function) cmd_modbus);
+  #ifdef DEBUG
+    addBitlashFunction("debug", (bitlash_function) cmd_debug);
+  #endif
+  addBitlashFunction("flash", (bitlash_function) reset_to_bootloader);
+
+  
   #ifdef LED_PIN
     digitalWrite(LED_PIN, LOW);
   #endif
@@ -150,18 +145,8 @@ void setup() {
   setupfinished=true;
 }
 
-void cmd_ok()
-{
-  p("OK\r\n");
-}
-
-void cmd_error(int n)
-{
-  p("ERR %d\r\n",n);
-}
-
 // Reset function
-void reset_to_bootloader()
+numvar reset_to_bootloader()
 {
   #ifdef LED_PIN
    digitalWrite(LED_PIN, LOW);
@@ -189,6 +174,142 @@ void reboot()
   while(1);
 }
 
+// bitlash p300help
+numvar cmd_p300help(void)
+{
+        p(
+          "P300 Controller Build=\"" __DATE__ " " __TIME__ "\"\r\n"
+          "Commands:\r\n"
+          "p300help\r\n"
+          "flash\t\tReboot to loader\r\n"
+          "boot\t\tReboot to application\r\n"
+         );
+        #ifdef DEBUG
+          p(
+            "debug(0|1)\tdisable|enable debug messages\r\n"
+            "debug(10)\tDump internal variables\r\n"
+          ); 
+        #endif
+         p("sensor(TYPE,NUM[,MULTIPLICATOR])\r\n\tRead value of sensor TYPE,NUM\r\n\tTYPE=1\tInternal temperature sensor\r\n");
+        #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
+         p("\tTYPE=2\tExternal temperature sensor\r\n\tTYPE=3\tEnternal humidity sensor\r\n");
+        #endif
+        #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
+         p("\tTYPE=4\tEnternal air quality sensor absolute value\r\n\tTYPE=5\tEnternal air quality sensor relative value\r\n\tTYPE=6\tEnternal air quality sensor 1 minute relative delta\r\n");
+        #endif
+        p("clock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 0=Sun-6=Sat\r\nmodbus(addr[,value])\tread or write word from/to P30 register\r\n");
+  return 0;
+}
+
+// bitlash sensor function
+numvar cmd_sensor(void)
+{
+  numvar ret=-100;
+  if (getarg(0)>=2)
+  {
+    float fret = -200;
+    char n=getarg(2)-1;
+    switch (getarg(1))
+    {
+        // Internal P300 sensor
+        case 1:
+          break;
+        #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
+        // External HYT Sensor
+        case 2:
+          if ( (n>=0) && (n<SENSOR_HYT)) fret=hy_temp[n];
+          break;
+        case 3:
+          if ( (n>=0) && (n<SENSOR_HYT)) fret=hy_humidity[n];
+          break;
+        #endif      
+        #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
+        // Gas sensor
+        case 4:
+          if ( (n>=0) && (n<SENSOR_GAS)) fret=gas_sensors[n]->getValue();
+          break;
+        case 5:
+          if ( (n>=0) && (n<SENSOR_GAS)) fret=gas_sensors[n]->getQuality();
+          break;
+        case 6:
+          fret=0;
+          break;
+        #endif      
+    }
+    // multiplication
+    if (getarg(0)>2)
+    {
+      ret=(numvar)(fret*getarg(3));
+    }
+      else
+    {
+       ret=(numvar)fret;
+    }
+    
+  }
+  return ret;
+}
+
+// bitlash sensor function
+numvar cmd_clock(void)
+{
+  if (getarg(0)==1)
+  {
+  }
+  return -1;
+}
+
+// bitlash modbus function
+numvar cmd_modbus(void)
+{
+  if (getarg(0)==1)
+  {
+  }
+  return -1;
+}
+
+// bitlash debug function
+#ifdef DEBUG
+numvar cmd_debug(void)
+{
+  numvar ret=(numvar)debug;
+  if (getarg(0)==1)
+  {
+    numvar arg = getarg(1);
+    switch (arg)
+    {
+      case 0:
+        debug=false;
+        break;
+      case 1:
+        debug=true;
+        break;
+      case 10:
+          p(
+           "uptime=%ds\r\n"
+           "proxy_source=%s\r\n"
+           "proxy_rc.wpos rpos age=%d %d %d\r\n"
+           "rc.available=%d\r\n"
+           "p300.available=%d\r\n"
+           "idle_timer=%d\r\n"
+           "sensor_timeout=%d\r\n"
+           "watchdog_timer=%d\r\n"
+           ,millis()/1000,
+           (proxy_source==NULL)?"NULL":proxy_source->name,
+           proxy_rc.buffer_wpos,proxy_rc.buffer_rpos,proxy_rc.age,
+           SERIAL_RC.available(),
+           SERIAL_P300.available(),
+           idle_timer,
+           sensor_timeout,
+           watchdog_timer
+         );
+        break;
+    }
+  }
+  return ret;
+}
+#endif
+
 #ifdef LED_PIN
 void blink(char n)
 {
@@ -207,27 +328,6 @@ void blink(char n)
    digitalWrite(LED_PIN, LOW);
    delay(500);
   }
-}
-#endif
-
-#ifdef SQLMODE
-// add variable to sql statement
-bool addtosql(char *var, unsigned int val)
-{
-  char comma[2]={',',0};
-  int l=strlen(var)+strlen(sqlvar);
-  if (l>=sizeof(sqlvar)) return false;
-  if (sqlvar[0]!=0) strcat(sqlvar,comma);
-  strcat(sqlvar,var);
-  
-  char valstr[16];
-  itoa(val,valstr,10);
-  l=strlen(valstr)+strlen(sqlval);
-  if (l>=sizeof(sqlval)) return false;
-  if (sqlval[0]!=0) strcat(sqlval,comma);
-  strcat(sqlval,valstr);
-  
-  return true;
 }
 #endif
 
@@ -259,11 +359,6 @@ void loop()
     if (proxy_rc.buffer_wpos>proxy_rc.buffer_rpos)
     {
        proxy_source=&proxy_rc;
-    }
-    // Modbus data (slave address 01) in buffer
-    if ( (proxy_pc.buffer_wpos>proxy_pc.buffer_rpos) && (proxy_pc.buffer[0]==0x01))
-    {
-       proxy_source=&proxy_pc;
     }
     // Data in internal buffer
     if (proxy_intern.buffer_wpos>proxy_intern.buffer_rpos)
@@ -301,20 +396,16 @@ void loop()
     proxy_source->buffer_rpos++;
    }
   }
+    else
+  {
+   runBitlash(); 
+  }
     
   
   // Read serial Ports
   if (SERIAL_RC.available())
   {
     addToProxyObj(&proxy_rc, SERIAL_RC.read(), false);    
-  }
-  if (SERIAL_PC.available())
-  {
-    char c = SERIAL_PC.read();
-    // End of line
-    if ( (c=='\n') || (c=='\r')) PcEol=true;
-      else PcEol=false;
-    addToProxyObj(&proxy_pc, c, false);    
   }
   
   // Write to serial Ports
@@ -327,191 +418,6 @@ void loop()
      #endif
      proxy_rc.buffer_rpos++;
   }
-
-  if ( (proxy_pc.buffer_wpos>proxy_pc.buffer_rpos)  && (proxy_pc.recieve_from_p300))
-  {
-     char c = proxy_pc.buffer[proxy_pc.buffer_rpos];
-     SERIAL_PC.write(c);
-     #ifdef DEBUG
-       if (debug) p("D BUFFER > RC  %X (%d)\r\n", c, proxy_pc.buffer_rpos);
-     #endif
-     proxy_pc.buffer_rpos++;
-  }
-  
-  /*********************************************************
-   * Handle commands
-   *********************************************************/
-  if ( (PcEol) && (proxy_pc.buffer[0]!=0x01)) // Command send
-  {
-    // add 0x00 to string end
-    proxy_pc.buffer[proxy_pc.buffer_wpos]=0;
-    
-    // Pointer to arguments
-    char delim[6]=" =\r\n\0";
-    char *last=NULL;
-    char *cmd=strtok_r((char*)proxy_pc.buffer,delim, &last);
-    char *arg1=strtok_r(NULL,delim, &last);
-    char *arg2=strtok_r(NULL,delim, &last);
-
-    #ifdef DEBUG
-    if (debug)
-    {
-      p("D cmd=%s\targ1=%s\targ2=%s\tstrncmp(DEBUG)=%d\r\n",cmd,arg1,arg2,strncmp((char*)proxy_pc.buffer,"DEBUG",5));
-    }
-    #endif
-
-    // HELP
-    if (proxy_pc.buffer[0]=='?')
-    {
-        p(
-          "P300 Controller Build=\"" __DATE__ " " __TIME__ "\"\r\n"
-          "Commands:\r\n"
-          "?\t\tHelp\r\n"
-          "FLASH\t\tReboot to loader\r\n"
-          "RESET\t\tReboot to application\r\n"
-         );
-        #ifdef DEBUG
-          p(
-            "DEBUG\t0|1\tdisable|enable debug messages\r\n"
-            "VARS\t\tDump internal variables\r\n"
-          ); 
-        #endif
-        #ifdef SQLMODE
-          p(
-            "SQLDUMP\t0|1Dump sensor readings as SQL statement\r\n"
-          );
-        #endif
-        #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
-         p("GETHT\tNUM\tRead external HYT-221 sensor NUM\r\n");
-        #endif
-        #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
-         p("GETGAS\tNUM\tRead external gas sensor NUM\r\n");
-        #endif
-    }
-    
-    // DEBUG
-    #ifdef DEBUG
-     if (strncmp(cmd,"DEBUG",5) == 0)
-     {
-       if (arg1[0]=='0')
-       {
-         debug=false;
-         cmd_ok();
-       }
-         else
-       if (arg1[0]=='1')
-       {
-         debug=true;
-         cmd_ok();
-       }
-         else
-       {
-        cmd_error(ERR_PARAMETER_VALUE);
-       }
-     }
-     if (strncmp(cmd,"VARS",4) == 0)
-     {
-         p(
-           "uptime=%ds\r\n"
-           "proxy_source=%s\r\n"
-           "proxy_rc.wpos rpos age=%d %d %d\r\n"
-           "rc.available=%d\r\n"
-           "p300.available=%d\r\n"
-           "idle_timer=%d\r\n"
-           "sensor_timeout=%d\r\n"
-           "watchdog_timer=%d\r\n"
-           #ifdef EEPROM_CRASHDEDECTION
-             "crashdedection=%d\r\n"
-             "newfirmware=%d\r\n"
-           #endif
-
-           ,millis()/1000,
-           (proxy_source==NULL)?"NULL":proxy_source->name,
-           proxy_rc.buffer_wpos,proxy_rc.buffer_rpos,proxy_rc.age,
-           SERIAL_RC.available(),
-           SERIAL_P300.available(),
-           idle_timer,
-           sensor_timeout,
-           watchdog_timer,
-           #ifdef EEPROM_CRASHDEDECTION
-             EEPROM.read(EEPROM_CRASHDEDECTION),
-             EEPROM.read(EEPROM_NEWFIRMWARE)
-           #endif
-         );
-         cmd_ok();
-     }
-    #endif
-    #ifdef SQLMODE
-     if (strncmp(cmd,"SQLDUMP",7) == 0)
-     {
-       if (arg1[0]=='0')
-       {
-         sqldump=false;
-         cmd_ok();
-       }
-         else
-       if (arg1[0]=='1')
-       {
-         sqldump=true;
-         cmd_ok();
-       }
-         else
-       {
-        cmd_error(ERR_PARAMETER_VALUE);
-       }
-     }
-    #endif
-
-    // Boot loader
-    if (strncmp(cmd,"FLASH",5) == 0)
-    {
-      cmd_ok();
-      reset_to_bootloader();
-    }
-
-    // Boot loader
-    if (strncmp(cmd,"RESET",5) == 0)
-    {
-      cmd_ok();
-      reboot();
-    }
-
-    #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
-     if (strncmp(cmd,"GETHT",5) == 0)
-     {
-       char n=atoi(arg1)-1;
-       if ( (n>=0) && (n<=SENSOR_HYT))
-       {
-         p("HT%d temperature=%f humidity=%f\r\n",n+1,hy_temp[n],hy_humidity[n]);
-         cmd_ok();
-       }
-         else
-       {
-        cmd_error(ERR_PARAMETER_VALUE);
-       }
-     }
-    #endif
-
-    #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
-     if (strncmp(cmd,"GETGAS",6) == 0)
-     {
-       char n=atoi(arg1)-1;
-       if ( (n>=0) && (n<=SENSOR_GAS))
-       {
-         p("GAS%d value=%d quality=%d\r\n",n+1,gas_sensors[n]->getValue(),gas_sensors[n]->getQuality());
-         cmd_ok();
-       }
-         else
-       {
-        cmd_error(ERR_PARAMETER_VALUE);
-       }
-     }
-    #endif
-
-    resetProxyObj(&proxy_pc);
-    PcEol=false;
-  }
-  
   
   // Read Sensors
   if ( (idle_timer>IDLE_TIMEOUT) && ((sensor_timeout>=SENSOR_TIMEOUT)))
@@ -519,28 +425,11 @@ void loop()
     #ifdef DEBUG
       if (debug) p("D Start reading sensors %d\r\n",millis());
     #endif
-    #ifdef SQLMODE
-      if (sqldump)
-      {
-        sqlvar[0]=0;
-        sqlval[0]=0;
-        addtosql("uptime",millis());
-      }
-    #endif
     
     #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
     for (char num_sensor=0;num_sensor<SENSOR_HYT;num_sensor++)
     {
       readHYT(hy_addresses[num_sensor], &hy_temp[num_sensor], &hy_humidity[num_sensor]);
-      #ifdef SQLMODE
-        if (sqldump)
-        {
-          char temp[6]={'t','e','m','p',num_sensor+'1'};
-          char hum[5]={'h','u','m',num_sensor+'1'};
-          addtosql(temp,hy_temp[num_sensor]);
-          addtosql(hum,hy_humidity[num_sensor]);
-        }
-      #endif
     }
     #endif
     
@@ -551,22 +440,11 @@ void loop()
       #ifdef DEBUG
        if (debug) p("D gas sensor %d=%d\r\n",i,gasval);
       #endif
-      #ifdef SQLMODE
-        if (sqldump)
-        {
-          char gasname[5]={'g','a','s',i+'1'};
-          addtosql(gasname,gasval);
-        }
-    #endif
-
     }
     #endif
 
     #ifdef DEBUG
       if (debug) p("D End reading sensors %d\r\n",millis());
-    #endif
-    #ifdef SQLMODE
-      if (sqldump) p("insert into p300dump(%s) values(%s);\r\n",sqlvar,sqlval);
     #endif
     sensor_timeout=0;
   }
@@ -698,7 +576,6 @@ void addToProxyObj(ProxyObj *obj, uint8_t data, bool recieve_from_p300)
 void timerCallbackMs() {
   // Increment age of data
   if (proxy_rc.buffer_wpos>0) proxy_rc.age++;
-  if ((proxy_pc.buffer_wpos>0) && (proxy_pc.buffer[0]==0x01)) proxy_pc.age++;
   if (proxy_intern.buffer_wpos>0) proxy_intern.age++;
   idle_timer++;
   if (sensor_timeout<=SENSOR_TIMEOUT) sensor_timeout++;

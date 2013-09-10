@@ -59,6 +59,7 @@ void GasSensor::sethtmap(char temp, char hum, uint16_t val)
 
 uint16_t GasSensor::getValue()
 {
+  if (lval==0) return analogRead(pin); 
   return lval;
 }
 
@@ -128,15 +129,22 @@ uint16_t GasSensor::loopAction(char temp, char humidity)
   }
  
   // Calculation
-  lval = tmp;
-  sethtmap(temp,humidity,tmp);
-  
   char hpos = (humidity-HT_MAP_MIN_HUM)/HT_MAP_DIV_HUM;
   if (hpos<0) hpos==0;
   if (hpos>=HT_MAP_COUNT_HUM) hpos=HT_MAP_COUNT_HUM-1;
   char tpos = (temp-HT_MAP_MIN_TEMP)/HT_MAP_DIV_TEMP;
   if (tpos<0) tpos=0;
   if (tpos>=HT_MAP_COUNT_TEMP) tpos=HT_MAP_COUNT_TEMP-1;
+  
+  // New value?
+  if ((htmap[hpos][tpos]==65536) && (quality<100))
+  {
+    sethtmap(temp,humidity,(int)((float)lval/(float)quality)*tmp);
+  }
+
+  lval = tmp;
+  sethtmap(temp,humidity,tmp);
+  
 
   quality = ( (float)htmap[hpos][tpos]/(float)lval)*100;
   ltmp = temp;

@@ -4,7 +4,6 @@
 
 // Debugging
 #define DEBUG  1
-#define SQLMODE 1
 #define LED_PIN 13
 
 #define P300_BAUD_RATE 4800
@@ -24,7 +23,7 @@
 #define SETUP_TIMEOUT 5000
 
 // timeout for software watchdog
-#define WATCHDOG_TIMEOUT 2000
+#define WATCHDOG_TIMEOUT 4000
 
 // timeout for crash detection
 #define CRASH_DETECTION_TIMEOUT 10000
@@ -52,15 +51,14 @@
 #define COMMAND_DELIMITER " "
 
 // Define classes for serial communication
-#define SERIAL_PC   Serial
 #define SERIAL_P300 Serial3  
 #define SERIAL_RC   Serial1
 
 #define SERIAL_BUFFER_SIZE  64
 
 // EEPROM-MAP
-#define EEPROM_NEWFIRMWARE 0
-#define EEPROM_CRASHDEDECTION 1
+//#define EEPROM_NEWFIRMWARE 2046
+//#define EEPROM_CRASHDEDECTION 2047
 
 
 // Data
