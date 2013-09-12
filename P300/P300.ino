@@ -30,9 +30,12 @@ ProxyObj* proxy_source;
 
 // Idle Timer
 IntervalTimer Timer_ms;
+IntervalTimer Timer_serial;
 uint16_t idle_timer;
 uint16_t sensor_timeout;
 uint16_t watchdog_timer;
+bool watchdogsource;
+bool inCallbackSerial;
 
 // HYT-221 sensors
 #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
@@ -109,9 +112,14 @@ void setup() {
   
   // Watchdog timer
   watchdog_timer=0;
+  watchdogsource=false;
 
   // Initialize 1ms timer with watchdog
   Timer_ms.begin(timerCallbackMs, 1000);
+  
+  // Initialize serial timer
+  inCallbackSerial=false;
+  Timer_serial.begin(timerCallbackSerial, 10000000/P300_BAUD_RATE);
 
   // Initialize I2C Bus
   Wire.begin();
@@ -337,87 +345,15 @@ void loop()
    #ifdef LED_PIN
     digitalWrite(LED_PIN, HIGH);
    #endif
-   watchdog_timer=0;
-   
-  /*********************************************************
-   * Serial Proxy handling
-   *********************************************************/
 
-  // free proxy_source if data to old
-  if ( (proxy_source!=NULL) && (proxy_source->age>READ_TIMEOUT))
-  {
-    #ifdef DEBUG
-       if (debug) p("D proxy_source=NULL timeout=%d\r\n",proxy_source->age);
-    #endif
-    proxy_source=NULL;
-  }
-    
-  // Assign proxy_source
-  if (proxy_source==NULL)
-  {
-    // Data in buffer
-    if (proxy_rc.buffer_wpos>proxy_rc.buffer_rpos)
-    {
-       proxy_source=&proxy_rc;
-    }
-    // Data in internal buffer
-    if (proxy_intern.buffer_wpos>proxy_intern.buffer_rpos)
-    {
-       proxy_source=&proxy_intern;
-   }
-   
-   // Flush old data
-   if (proxy_source!=NULL)
+   // Wechselwatchdog
+   if (watchdogsource)
    {
-     SERIAL_P300.flush(); // send outstanding data
-     SERIAL_P300.clear(); // clear buffer
-     #ifdef DEBUG
-         if (debug) p("D proxy_source=%s\r\n",proxy_source->name);
-     #endif
+       watchdog_timer=0;
+       watchdogsource=false;
    }
-  }
 
-  if (proxy_source!=NULL)
-  {
-   // Read data from P300
-   if (SERIAL_P300.available())
-   {
-     addToProxyObj(proxy_source, SERIAL_P300.read(), true);
-   }
-   
-   // Send data to P300
-   if ( (proxy_source->buffer_wpos>proxy_source->buffer_rpos) && (proxy_source->recieve_from_p300==false))
-   {
-    char c = proxy_source->buffer[proxy_source->buffer_rpos];
-    SERIAL_P300.write(c);
-    #ifdef DEBUG
-      if (debug) p("D %s > P300 %X (%d)\r\n",proxy_source->name,c,proxy_source->buffer_rpos);
-    #endif
-    proxy_source->buffer_rpos++;
-   }
-  }
-    else
-  {
-   runBitlash(); 
-  }
-    
-  
-  // Read serial Ports
-  if (SERIAL_RC.available())
-  {
-    addToProxyObj(&proxy_rc, SERIAL_RC.read(), false);    
-  }
-  
-  // Write to serial Ports
-  if ( (proxy_rc.buffer_wpos>proxy_rc.buffer_rpos) && (proxy_rc.recieve_from_p300))
-  {
-     char c = proxy_rc.buffer[proxy_rc.buffer_rpos];
-     SERIAL_RC.write(c);
-     #ifdef DEBUG
-       if (debug) p("D BUFFER > RC  %X (%d)\r\n", c, proxy_rc.buffer_rpos);
-     #endif
-     proxy_rc.buffer_rpos++;
-  }
+   runBitlash();
   
   // Read Sensors
   if ( (idle_timer>IDLE_TIMEOUT) && ((sensor_timeout>=SENSOR_TIMEOUT)))
@@ -604,3 +540,94 @@ void timerCallbackMs() {
   }
 }
 
+// Serial Timer
+void timerCallbackSerial()
+{
+   if (inCallbackSerial) return;
+   inCallbackSerial=true;
+   
+   // Wechselwatchdog
+   if (!watchdogsource)
+   {
+       watchdog_timer=0;
+       watchdogsource=true;
+   }
+
+   
+  /*********************************************************
+   * Serial Proxy handling
+   *********************************************************/
+
+  // free proxy_source if data to old
+  if ( (proxy_source!=NULL) && (proxy_source->age>READ_TIMEOUT))
+  {
+    #ifdef DEBUG
+       if (debug) p("D proxy_source=NULL timeout=%d\r\n",proxy_source->age);
+    #endif
+    proxy_source=NULL;
+  }
+    
+  // Assign proxy_source
+  if (proxy_source==NULL)
+  {
+    // Data in buffer
+    if (proxy_rc.buffer_wpos>proxy_rc.buffer_rpos)
+    {
+       proxy_source=&proxy_rc;
+    }
+    // Data in internal buffer
+    if (proxy_intern.buffer_wpos>proxy_intern.buffer_rpos)
+    {
+       proxy_source=&proxy_intern;
+   }
+   
+   // Flush old data
+   if (proxy_source!=NULL)
+   {
+     SERIAL_P300.flush(); // send outstanding data
+     SERIAL_P300.clear(); // clear buffer
+     #ifdef DEBUG
+         if (debug) p("D proxy_source=%s\r\n",proxy_source->name);
+     #endif
+   }
+  }
+
+  if (proxy_source!=NULL)
+  {
+   // Read data from P300
+   while (SERIAL_P300.available())
+   {
+     addToProxyObj(proxy_source, SERIAL_P300.read(), true);
+   }
+   
+   // Send data to P300
+   if ( (proxy_source->buffer_wpos>proxy_source->buffer_rpos) && (proxy_source->recieve_from_p300==false))
+   {
+    char c = proxy_source->buffer[proxy_source->buffer_rpos];
+    SERIAL_P300.write(c);
+    #ifdef DEBUG
+      if (debug) p("D %s > P300 %X (%d)\r\n",proxy_source->name,c,proxy_source->buffer_rpos);
+    #endif
+    proxy_source->buffer_rpos++;
+   }
+  }
+  
+  // Read serial Ports
+  while (SERIAL_RC.available())
+  {
+    addToProxyObj(&proxy_rc, SERIAL_RC.read(), false);    
+  }
+  
+  // Write to serial Ports
+  if ( (proxy_rc.buffer_wpos>proxy_rc.buffer_rpos) && (proxy_rc.recieve_from_p300))
+  {
+     char c = proxy_rc.buffer[proxy_rc.buffer_rpos];
+     SERIAL_RC.write(c);
+     #ifdef DEBUG
+       if (debug) p("D BUFFER > RC  %X (%d)\r\n", c, proxy_rc.buffer_rpos);
+     #endif
+     proxy_rc.buffer_rpos++;
+  }
+  
+  inCallbackSerial=false;
+}
