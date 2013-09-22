@@ -34,6 +34,8 @@ ModbusCRC crc;
 // Idle Timer
 IntervalTimer Timer_ms;
 IntervalTimer Timer_serial;
+IntervalTimer Timer_clock;
+
 uint16_t idle_timer;
 uint16_t sensor_timeout;
 uint16_t watchdog_timer;
@@ -128,6 +130,9 @@ void setup() {
   // Initialize serial timer
   inCallbackSerial=false;
   Timer_serial.begin(timerCallbackSerial, 10000000/P300_BAUD_RATE);
+  
+  // Clock timer
+  Timer_clock.begin(timerCallbackClock, 10000000);
 
   // Initialize I2C Bus
   Wire.begin();
@@ -287,7 +292,7 @@ numvar cmd_modbus(void)
   char waitforbytes = 7; // read answer
   
   // One or two arguments
-  if ( (numarg>0) && (numarg<2))
+  if ( (numarg>0) && (numarg<3))
   {
     // Ser proxyObj to a known state
     resetProxyObj(&proxy_intern);
@@ -784,4 +789,8 @@ void timerCallbackSerial()
   }
   
   inCallbackSerial=false;
+}
+
+void timerCallbackClock()
+{
 }
