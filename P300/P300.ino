@@ -334,20 +334,32 @@ numvar cmd_modbus(void)
     // CRC senden
     addWordToProxyObj(&proxy_intern, crc.getCRC(), NULL);
     
-    while ( proxy_intern.buffer_rpos>0 )
+    // Wait for end of send packet 
+    #ifdef DEBUG
+      if (debug) p("D Wait for end of send packet\r\n");
+    #endif
+    while ( ( proxy_intern.buffer_rpos>0 ) && (proxy_intern.recieve_from_p300==false))
     {
       // Sleep until next interrupt
       asm volatile("wfi\r\n"::);
     }
-
     
     // Wait for answer
-//    while ( ( (!proxy_intern.recieve_from_p300) || ( (proxy_intern.age<READ_TIMEOUT) && (proxy_intern.buffer_wpos>=waitforbytes) ) ) && (proxy_intern.age<READ_TIMEOUT*2))
-    while ( proxy_intern.age<READ_TIMEOUT )
+    #ifdef DEBUG
+      if (debug) p("D Wait for answer\r\n");
+    #endif
+    while ( ( proxy_intern.age<READ_TIMEOUT ) && (proxy_intern.buffer_wpos<waitforbytes) ) 
     {
       // Sleep until next interrupt
       asm volatile("wfi\r\n"::);
     }
+    
+    // Reset wpos if nothing recieved
+    if (proxy_intern.recieve_from_p300==false) proxy_intern.buffer_wpos=0;
+    
+    #ifdef DEBUG
+      if (debug) p("D Stop wait for answer. %d bytes in buffer\r\n",proxy_intern.buffer_wpos);
+    #endif
     
     if (proxy_intern.buffer_wpos>0)
     {
