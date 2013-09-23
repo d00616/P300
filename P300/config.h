@@ -11,7 +11,7 @@
 
 // in mS 1000/4800 Baud/10 * 3,5
 #define MODBUS_TIMEOUT  7
-#define READ_TIMEOUT  20
+#define READ_TIMEOUT  100
 
 // time of inactivity before reading sensors
 #define IDLE_TIMEOUT 100
@@ -69,6 +69,7 @@ struct ProxyObj
    char     buffer[SERIAL_BUFFER_SIZE];
    uint8_t  age;
    bool     recieve_from_p300;
+   bool     transmission;
    #ifdef DEBUG
    char*  name;
    #endif

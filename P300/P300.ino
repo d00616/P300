@@ -289,6 +289,9 @@ numvar cmd_modbus(void)
   if (recursion_counter>3) return -2;
   recursion_counter++;
   
+  // reset watchdog
+  watchdog_timer=0;
+
   char numarg = getarg(0);
   numvar ret = -1;
   char waitforbytes = 7; // read answer
