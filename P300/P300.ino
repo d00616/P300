@@ -301,7 +301,7 @@ bool readwriteModbus(uint16_t address, uint8_t registercount, bool write)
   
   // check buffer size
   if (waitforbytes>SERIAL_BUFFER_SIZE) return false;
-  if ( (write) && (registercount>(SERIAL_BUFFER_SIZE-MODBUS_BUFFER_WRITE_START-2)/2) return false;
+  if ( (write) && (registercount>(SERIAL_BUFFER_SIZE-MODBUS_BUFFER_WRITE_START-2)/2)) return false;
   
   bool ret = false;
   
@@ -420,7 +420,7 @@ bool readwriteModbus(uint16_t address, uint8_t registercount, bool write)
   }
   
   // Hold buffer at sucessful read operations
-  if ((!write) (ret==true)) inReadWriteModbus=false;
+  if ((write==false) && (ret==true)) inReadWriteModbus=false;
   return ret;
 }
 
