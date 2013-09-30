@@ -11,7 +11,7 @@
 
 // in mS 1000/4800 Baud/10 * 3,5
 #define MODBUS_TIMEOUT  7
-#define READ_TIMEOUT  100
+#define READ_TIMEOUT  50
 
 // time of inactivity before reading sensors
 #define IDLE_TIMEOUT 100

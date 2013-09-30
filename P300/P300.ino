@@ -294,7 +294,13 @@ numvar cmd_clock(void)
 bool readwriteModbus(uint16_t address, uint8_t registercount, bool write)
 {
   // no double call
-  if (inReadWriteModbus) return false;
+  if (inReadWriteModbus)
+  {
+    #ifdef DEBUG
+     if (debug) p("D readwriteModbus inReadWriteModbus ret=false\r\n");
+    #endif
+    return false;
+  }
   inReadWriteModbus=true;
   
   char waitforbytes = 5+(registercount*2); // read answer
@@ -413,14 +419,14 @@ bool readwriteModbus(uint16_t address, uint8_t registercount, bool write)
         // Sleep until next interrupt
         asm volatile("wfi\r\n"::);
       }
-      
-      // recursive call
-      ret = cmd_modbus();
     }
   }
-  
+
   // Hold buffer at sucessful read operations
-  if ((write==false) && (ret==true)) inReadWriteModbus=false;
+  if (!((write==false) && (ret==true))) inReadWriteModbus=false;
+  #ifdef DEBUG
+     if (debug) p("D readwriteModbus return = %d\r\n",ret);
+  #endif
   return ret;
 }
 
@@ -430,125 +436,42 @@ numvar cmd_modbus(void)
   // endless loop protection
   if (recursion_counter>3) return -2;
   recursion_counter++;
+
+  #ifdef DEBUG
+    if (debug) p("D Start cmd_modbus instance %d\r\n",recursion_counter);
+  #endif
   
   char numarg = getarg(0);
+  bool write = false;
+  bool retmodbus;
+  if (numarg==2) write=true;
   numvar ret = -1;
-  char waitforbytes = 7; // read answer
   
   // One or two arguments
   if ( (numarg>0) && (numarg<3))
   {
-    // Ser proxyObj to a known state
-    resetProxyObj(&proxy_intern);
-   
-  
-    // Reset CRC
-    crc.clearCRC();
-      
-    // Write Modbus Address
-    addToProxyObj(&proxy_intern, 0x01, false);
-    crc.add_byte(0x01);
-  
-    if (numarg==1)
+    if (write)
     {
-      // Function Code: 0x03 Read Holding Registers
-      addToProxyObj(&proxy_intern, 0x03, false);
-      crc.add_byte(0x03);
+        // write data to buffer
+        proxy_intern.buffer[MODBUS_BUFFER_WRITE_START] = (uint16_t)getarg(2) >> 8;
+        proxy_intern.buffer[MODBUS_BUFFER_WRITE_START+1] = (uint16_t)getarg(2) & 0xff;
+    }
+    
+    retmodbus = readwriteModbus((uint16_t)getarg(1), 1, write);
+    
+    if (retmodbus==true)
+    {
+      if (write==false)
+      {
+        ret = proxy_intern.buffer[3]<<8 & proxy_intern.buffer[4]; 
+        inReadWriteModbus=false;
+      }
     }
       else
     {
-      // Function Code: 0x10 Preset Multiple Registers
-      addToProxyObj(&proxy_intern, 0x10, false);
-      crc.add_byte(0x10);  
-    }
-    
-    // Write adress
-    addWordToProxyObj(&proxy_intern, (uint16_t)getarg(1), &crc);
-
-    // Number of registers to read/write
-    addWordToProxyObj(&proxy_intern, 0x0001, &crc);
-    
-    // Write
-    if (numarg==2)
-    {
-      // Two bytes following
-      addToProxyObj(&proxy_intern, 0x02, false);
-      crc.add_byte(0x02);
-      
-      addWordToProxyObj(&proxy_intern, (uint16_t)getarg(2), &crc);
-      
-      waitforbytes=8; // write answer
-    }
-    
-    // CRC senden
-    addWordToProxyObj(&proxy_intern, crc.getCRC(), NULL);
-    
-    // Wait for end of send packet 
-    #ifdef DEBUG
-      if (debug) p("D Wait for end of send packet\r\n");
-    #endif
-    while ( ( proxy_intern.buffer_rpos>0 ) && (proxy_intern.recieve_from_p300==false))
-    {
-      // Sleep until next interrupt
-      asm volatile("wfi\r\n"::);
-    }
-    
-    // Wait for answer
-    #ifdef DEBUG
-      if (debug) p("D Wait for answer\r\n");
-    #endif
-    while ( ( proxy_intern.age<READ_TIMEOUT ) && (proxy_intern.buffer_wpos<waitforbytes) ) 
-    {
-      // Sleep until next interrupt
-      asm volatile("wfi\r\n"::);
-    }
-    
-    // Reset wpos if nothing recieved
-    if (proxy_intern.recieve_from_p300==false) proxy_intern.buffer_wpos=0;
-    
-    #ifdef DEBUG
-      if (debug) p("D Stop wait for answer. %d bytes in buffer\r\n",proxy_intern.buffer_wpos);
-    #endif
-    
-    if (proxy_intern.buffer_wpos>0)
-    {
-      // Check answer
-      crc.clearCRC();
-      uint8_t i =0;
-      for (;i<proxy_intern.buffer_wpos-2;i++) crc.add_byte(proxy_intern.buffer[i]);
-      if (crc.compareCRC(proxy_intern.buffer[i++],proxy_intern.buffer[i++]))
-      {
-        #ifdef DEBUG
-          if (debug) p("D CRC OK\r\n");
-        #endif
-      
-        if (numarg==2)
-        {
-           // write
-          ret = 1;
-        }
-          else
-        {
-           // read
-          ret = proxy_intern.buffer[3]<<8 & proxy_intern.buffer[4]; 
-        }
-      }
-       else
-      {   
-        #ifdef DEBUG
-          if (debug) p("D CRC error\r\n");
-        #endif
-
-        // Wair for timeout for recursion call
-        while (proxy_intern.age<READ_TIMEOUT)
-        {
-          // Sleep until next interrupt
-          asm volatile("wfi\r\n"::);
-        }
-      
-        // recursive call
-        ret = cmd_modbus();
-      }
+      // recursive call
+      delay(READ_TIMEOUT);
+      ret = cmd_modbus();
     }
   }
   
