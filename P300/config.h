@@ -60,6 +60,9 @@
 //#define EEPROM_NEWFIRMWARE 2046
 //#define EEPROM_CRASHDEDECTION 2047
 
+// Modbus buffer address
+#define MODBUS_BUFFER_READ_START  4
+#define MODBUS_BUFFER_WRITE_START 7
 
 // Data
 struct ProxyObj

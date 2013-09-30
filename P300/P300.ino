@@ -15,6 +15,7 @@
 #include <IntervalTimer.h>
 #include "bitlash.h"
 #include "modbuscrc.h"
+#include "clock.h"
 
 #ifdef DEBUG
   bool debug;
@@ -31,6 +32,8 @@ ProxyObj* proxy_source;
 
 ModbusCRC crc;
 
+Clock clock;
+
 // Idle Timer
 IntervalTimer Timer_ms;
 IntervalTimer Timer_serial;
@@ -41,7 +44,12 @@ uint16_t sensor_timeout;
 uint16_t watchdog_timer;
 bool watchdogsource;
 bool inCallbackSerial;
+bool inReadWriteModbus;
 uint8_t recursion_counter;
+
+// P300 sensor values
+int8_t p300_t[4]={-100,-100,-100,-100};
+uint16_t p300_s[2]={0,0};
 
 // HYT-221 sensors
 #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
@@ -123,7 +131,8 @@ void setup() {
   
   // Recursion counter
   recursion_counter=0;
-
+  inReadWriteModbus=false;
+  
   // Initialize 1ms timer with watchdog
   Timer_ms.begin(timerCallbackMs, 1000);
   
@@ -132,6 +141,7 @@ void setup() {
   Timer_serial.begin(timerCallbackSerial, 10000000/P300_BAUD_RATE);
   
   // Clock timer
+  clock=Clock();
   Timer_clock.begin(timerCallbackClock, 10000000);
 
   // Initialize I2C Bus
@@ -178,7 +188,6 @@ numvar reset_to_bootloader()
   _reboot_Teensyduino_();
 }
 
-
 // reboot function
 void reboot()
 {
@@ -201,7 +210,6 @@ numvar cmd_p300help(void)
 {
         p(
           "P300 Controller Build=\"" __DATE__ " " __TIME__ "\"\r\n"
-          "USE IT AT YOUR OWN RISK!!\r\n"
           "Commands:\r\n"
           "p300help\r\n"
           "flash\t\tReboot to loader\r\n"
@@ -282,6 +290,140 @@ numvar cmd_clock(void)
   return -1;
 }
 
+// read or write P300 registers
+bool readwriteModbus(uint16_t address, uint8_t registercount, bool write)
+{
+  // no double call
+  if (inReadWriteModbus) return false;
+  inReadWriteModbus=true;
+  
+  char waitforbytes = 5+(registercount*2); // read answer
+  
+  // check buffer size
+  if (waitforbytes>SERIAL_BUFFER_SIZE) return false;
+  if ( (write) && (registercount>(SERIAL_BUFFER_SIZE-MODBUS_BUFFER_WRITE_START-2)/2) return false;
+  
+  bool ret = false;
+  
+  // Ser proxyObj to a known state
+  resetProxyObj(&proxy_intern);
+  
+  // Reset CRC
+  crc.clearCRC();
+      
+  // Write Modbus Address
+  addToProxyObj(&proxy_intern, 0x01, false);
+  crc.add_byte(0x01);
+  
+  if (!write)
+  {
+    // Function Code: 0x03 Read Holding Registers
+    addToProxyObj(&proxy_intern, 0x03, false);
+    crc.add_byte(0x03);
+  }
+    else
+  {
+    // Function Code: 0x10 Preset Multiple Registers
+    addToProxyObj(&proxy_intern, 0x10, false);
+    crc.add_byte(0x10);  
+  }
+    
+  // Write adress
+  addWordToProxyObj(&proxy_intern, (uint16_t)getarg(1), &crc);
+
+  // Number of registers to read/write
+  addWordToProxyObj(&proxy_intern, registercount, &crc);
+    
+  // Write
+  if (write)
+  {
+    // registercount*2 bytes following
+    addToProxyObj(&proxy_intern, registercount*2, false);
+    crc.add_byte(registercount*2);
+    
+    uint8_t end = proxy_intern.buffer_wpos+registercount*2;
+    if (end>SERIAL_BUFFER_SIZE-2)
+    {
+      inReadWriteModbus=false;
+      return false; // to much for this buffer
+    }
+    
+    for (uint8_t i=proxy_intern.buffer_wpos;i<end;i++)
+    {
+      crc.add_byte(proxy_intern.buffer[i]);
+      proxy_intern.buffer_wpos++;      
+    }
+     
+    waitforbytes=6+(registercount*2); // write answer
+  }
+    
+  // CRC senden
+  addWordToProxyObj(&proxy_intern, crc.getCRC(), NULL);
+    
+  // Wait for end of send packet 
+  #ifdef DEBUG
+    if (debug) p("D Wait for end of send packet\r\n");
+  #endif
+  
+  while ( ( proxy_intern.buffer_rpos>0 ) && (proxy_intern.recieve_from_p300==false))
+  {
+    // Sleep until next interrupt
+    asm volatile("wfi\r\n"::);
+  }
+    
+  // Wait for answer
+  #ifdef DEBUG
+    if (debug) p("D Wait for answer\r\n");
+  #endif
+  while ( ( proxy_intern.age<READ_TIMEOUT ) && (proxy_intern.buffer_wpos<waitforbytes) ) 
+  {
+    // Sleep until next interrupt
+    asm volatile("wfi\r\n"::);
+  }
+    
+  // Reset wpos if nothing recieved
+  if (proxy_intern.recieve_from_p300==false) proxy_intern.buffer_wpos=0;
+    
+  #ifdef DEBUG
+    if (debug) p("D Stop wait for answer. %d bytes in buffer\r\n",proxy_intern.buffer_wpos);
+  #endif
+    
+  if (proxy_intern.buffer_wpos>0)
+  {
+    // Check answer
+    crc.clearCRC();
+    uint8_t i =0;
+    for (;i<proxy_intern.buffer_wpos-2;i++) crc.add_byte(proxy_intern.buffer[i]);
+    if (crc.compareCRC(proxy_intern.buffer[i++],proxy_intern.buffer[i++]))
+    {
+      #ifdef DEBUG
+        if (debug) p("D CRC OK\r\n");
+      #endif
+      ret = true;
+    }
+       else
+    {   
+      #ifdef DEBUG
+        if (debug) p("D CRC error\r\n");
+      #endif
+
+      // Wait for timeout for possible recursion call
+      while (proxy_intern.age<READ_TIMEOUT)
+      {
+        // Sleep until next interrupt
+        asm volatile("wfi\r\n"::);
+      }
+      
+      // recursive call
+      ret = cmd_modbus();
+    }
+  }
+  
+  // Hold buffer at sucessful read operations
+  if ((!write) (ret==true)) inReadWriteModbus=false;
+  return ret;
+}
+
 // bitlash modbus function
 numvar cmd_modbus(void)
 {
@@ -289,9 +431,6 @@ numvar cmd_modbus(void)
   if (recursion_counter>3) return -2;
   recursion_counter++;
   
-  // reset watchdog
-  watchdog_timer=0;
-
   char numarg = getarg(0);
   numvar ret = -1;
   char waitforbytes = 7; // read answer
@@ -344,22 +483,26 @@ numvar cmd_modbus(void)
     // CRC senden
     addWordToProxyObj(&proxy_intern, crc.getCRC(), NULL);
     
-    // wait send + recieve time
-    delay( ((proxy_intern.buffer_wpos+waitforbytes)*1000)/480 );
-    
     // Wait for end of send packet 
     #ifdef DEBUG
-      if (debug) p("D Wait for end of transmission\r\n");
+      if (debug) p("D Wait for end of send packet\r\n");
     #endif
-
-    while ( proxy_intern.transmission )
+    while ( ( proxy_intern.buffer_rpos>0 ) && (proxy_intern.recieve_from_p300==false))
     {
-       delay(MODBUS_TIMEOUT);
+      // Sleep until next interrupt
+      asm volatile("wfi\r\n"::);
     }
     
-    // set rpos to wpos;
-    proxy_intern.buffer_rpos=proxy_intern.buffer_wpos;
-
+    // Wait for answer
+    #ifdef DEBUG
+      if (debug) p("D Wait for answer\r\n");
+    #endif
+    while ( ( proxy_intern.age<READ_TIMEOUT ) && (proxy_intern.buffer_wpos<waitforbytes) ) 
+    {
+      // Sleep until next interrupt
+      asm volatile("wfi\r\n"::);
+    }
+    
     // Reset wpos if nothing recieved
     if (proxy_intern.recieve_from_p300==false) proxy_intern.buffer_wpos=0;
     
@@ -386,8 +529,8 @@ numvar cmd_modbus(void)
         }
           else
         {
-          // read
-          ret = ((proxy_intern.buffer[3]*256) + proxy_intern.buffer[4]);
+           // read
+          ret = proxy_intern.buffer[3]<<8 & proxy_intern.buffer[4]; 
         }
       }
        else
@@ -603,7 +746,6 @@ void resetProxyObj(ProxyObj *obj)
   obj->buffer_wpos=0;
   obj->age=0;
   obj->recieve_from_p300=false;
-  obj->transmission=false;
   #ifdef DEBUG
     if (debug)
     {
@@ -615,9 +757,6 @@ void resetProxyObj(ProxyObj *obj)
 // Add Data to ProxyObj
 void addToProxyObj(ProxyObj *obj, uint8_t data, bool recieve_from_p300)
 {
-  // Reset idle timer
-  idle_timer=0;
-  
   // wrong call of addToProxyObj
   if (obj==NULL)
   {
@@ -635,12 +774,7 @@ void addToProxyObj(ProxyObj *obj, uint8_t data, bool recieve_from_p300)
   {
      resetProxyObj(obj);
      obj->recieve_from_p300=recieve_from_p300;     
-  }
-    else
-  {
-     // reset transmission and age
-     obj->transmission = true;
-     obj->age = 0;
+//     if (proxy_source==obj) proxy_source=NULL;
   }
 
   #ifdef DEBUG
@@ -651,6 +785,10 @@ void addToProxyObj(ProxyObj *obj, uint8_t data, bool recieve_from_p300)
   #endif
   obj->buffer[obj->buffer_wpos]=data;
   if (obj->buffer_wpos < sizeof(obj->buffer)) obj->buffer_wpos++;
+  obj->age=0;
+
+  // Reset idle timer
+  idle_timer=0;
 }
 
 void addWordToProxyObj(ProxyObj *obj, uint16_t data,ModbusCRC *crc)
@@ -671,16 +809,10 @@ void addWordToProxyObj(ProxyObj *obj, uint16_t data,ModbusCRC *crc)
 // 1ms second timer
 void timerCallbackMs() {
   // Increment age of data
-  if (proxy_rc.buffer_wpos>0)
-  {
-      proxy_rc.age++;
-      if (proxy_rc.age>MODBUS_TIMEOUT) proxy_rc.transmission=false;
-  }
-  if (proxy_intern.buffer_wpos>0)
-  {
-     proxy_intern.age++;
-      if (proxy_intern.age>MODBUS_TIMEOUT) proxy_intern.transmission=false;
-  }
+//  if (proxy_rc.buffer_wpos>0) proxy_rc.age++;
+//  if (proxy_intern.buffer_wpos>0) proxy_intern.age++;
+  proxy_rc.age++;
+  proxy_intern.age++;
   idle_timer++;
   if (sensor_timeout<=SENSOR_TIMEOUT) sensor_timeout++;
   
@@ -805,4 +937,5 @@ void timerCallbackSerial()
 
 void timerCallbackClock()
 {
+  clock.secondAction();
 }
