@@ -470,6 +470,7 @@ numvar cmd_modbus(void)
       else
     {
       // recursive call
+      watchdog_timer=0;
       delay(READ_TIMEOUT);
       ret = cmd_modbus();
     }
