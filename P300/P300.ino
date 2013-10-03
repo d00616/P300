@@ -464,7 +464,7 @@ numvar cmd_modbus(void)
     {
       if (write==false)
       {
-        ret = proxy_intern.buffer[3]<<8 & proxy_intern.buffer[4]; 
+        ret = proxy_intern.buffer[MODBUS_BUFFER_READ_START]<<8 & proxy_intern.buffer[MODBUS_BUFFER_READ_START+1]; 
         inReadWriteModbus=false;
       }
     }
@@ -734,10 +734,10 @@ void addWordToProxyObj(ProxyObj *obj, uint16_t data,ModbusCRC *crc)
 // 1ms second timer
 void timerCallbackMs() {
   // Increment age of data
-//  if (proxy_rc.buffer_wpos>0) proxy_rc.age++;
-//  if (proxy_intern.buffer_wpos>0) proxy_intern.age++;
-  proxy_rc.age++;
-  proxy_intern.age++;
+  if (proxy_rc.buffer_wpos>0) proxy_rc.age++;
+  if (proxy_intern.buffer_wpos>0) proxy_intern.age++;
+//  proxy_rc.age++;
+//  proxy_intern.age++;
   idle_timer++;
   if (sensor_timeout<=SENSOR_TIMEOUT) sensor_timeout++;
   
@@ -796,12 +796,12 @@ void timerCallbackSerial()
   if (proxy_source==NULL)
   {
     // Data in buffer
-    if (proxy_rc.buffer_wpos>proxy_rc.buffer_rpos)
+    if ((proxy_rc.buffer_wpos>proxy_rc.buffer_rpos) && (proxy_rc.recieve_from_p300==false))
     {
        proxy_source=&proxy_rc;
     }
     // Data in internal buffer
-    if (proxy_intern.buffer_wpos>proxy_intern.buffer_rpos)
+    if ((proxy_intern.buffer_wpos>proxy_intern.buffer_rpos) && (proxy_intern.recieve_from_p300==false))
     {
        proxy_source=&proxy_intern;
     }
