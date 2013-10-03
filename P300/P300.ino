@@ -120,10 +120,10 @@ void setup() {
   proxy_source=NULL;
   
   // Set Idle timer
-  idle_timer=IDLE_TIMEOUT;
+  idle_timer=0;
   
   // Set Sensor timer
-  sensor_timeout=SENSOR_TIMEOUT;
+  sensor_timeout=0;
   
   // Watchdog timer
   watchdog_timer=0;
@@ -228,7 +228,7 @@ numvar cmd_p300help(void)
         #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
          p("\tTYPE=4\tEnternal air quality sensor absolute value\r\n\tTYPE=5\tEnternal air quality sensor relative value\r\n\tTYPE=6\tEnternal air quality sensor 1 minute relative delta\r\n");
         #endif
-        p("clock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 0=Sun-6=Sat\r\nmodbus(addr[,value])\tread or write word from/to P30 register\r\n");
+	p("clock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 0=Sun-6=Sat\r\nmodbus(addr[,val])\tread or write word from/to P300 register\r\n\t\tRegister: https://github.com/d00616/P300/wiki/Modbus-Register\r\n");
   return 0;
 }
 
@@ -244,6 +244,7 @@ numvar cmd_sensor(void)
     {
         // Internal P300 sensor
         case 1:
+	  if ( (n>=0) && (n<3)) fret=p300_t[n];
           break;
         #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
         // External HYT Sensor
@@ -335,7 +336,7 @@ bool readwriteModbus(uint16_t address, uint8_t registercount, bool write)
   }
     
   // Write adress
-  addWordToProxyObj(&proxy_intern, (uint16_t)getarg(1), &crc);
+  addWordToProxyObj(&proxy_intern, address, &crc);
 
   // Number of registers to read/write
   addWordToProxyObj(&proxy_intern, registercount, &crc);

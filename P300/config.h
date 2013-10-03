@@ -26,7 +26,8 @@
 #define WATCHDOG_TIMEOUT 4000
 
 // timeout for crash detection
-#define CRASH_DETECTION_TIMEOUT 10000
+// not working since bitlash integration
+//#define CRASH_DETECTION_TIMEOUT 10000
 
 // define I2C address when HYT-221 is installed
 #define SENSOR_HYT 1
@@ -61,7 +62,7 @@
 //#define EEPROM_CRASHDEDECTION 2047
 
 // Modbus buffer address
-#define MODBUS_BUFFER_READ_START  4
+#define MODBUS_BUFFER_READ_START  3
 #define MODBUS_BUFFER_WRITE_START 7
 
 // Data
