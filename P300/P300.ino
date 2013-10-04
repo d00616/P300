@@ -232,7 +232,7 @@ numvar cmd_p300help(void)
         #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
          p("\tTYPE=4\tEnternal air quality sensor absolute value\r\n\tTYPE=5\tEnternal air quality sensor relative value\r\n\tTYPE=6\tEnternal air quality sensor 1 minute relative delta\r\n");
         #endif
-	p("clock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 1=Mon-7=Sun\r\nmodbus(addr[,val])\tread or write word from/to P300 register\r\n\t\tRegister: https://github.com/d00616/P300/wiki/Modbus-Register\r\n");
+	p("clock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 1=Mon-7=Sun\r\nmodbus(addr[,val])\tread or write word from/to P300 register\r\n\t\t!100,000 EEPROM write cycles available!\r\n\t\tRegister: https://github.com/d00616/P300/wiki/Modbus-Register\r\n");
   return 0;
 }
 
