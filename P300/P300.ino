@@ -268,7 +268,7 @@ numvar cmd_sensor(void)
           if ( (n>=0) && (n<SENSOR_GAS)) fret=gas_sensors[n]->getQuality();
           break;
         case 6:
-          fret=0;
+          if ( (n>=0) && (n<SENSOR_GAS)) fret=gas_sensors[n]->getQualityHistoryDelta();
           break;
         #endif      
     }

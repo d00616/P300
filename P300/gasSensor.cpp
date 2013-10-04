@@ -30,6 +30,9 @@ GasSensor::GasSensor(char indexnumber, int pinnumber)
      
      lval=0;
      quality=100;
+     for (char i=0; i<QUALITY_HISTORY;i++) quality_history[i]=100;
+     quality_history_pos=0;
+
      mapresettime=MAP_RESET_TIME;
  
      for (uint8_t hum=0; hum<HT_MAP_COUNT_HUM; hum++)
@@ -68,6 +71,21 @@ int8_t GasSensor::getQuality()
   return quality;
 }
 
+int8_t GasSensor::getQualityHistoryDelta()
+{
+  int8_t min=100;
+  int8_t max=0;
+  for (char i=0;i<QUALITY_HISTORY;i++)
+  {
+     if (min>quality_history[i]) min=quality_history[i];
+     if (max<quality_history[i]) max=quality_history[i];
+  }
+  
+  // return a value if quality are increasing
+  if ((quality==min) && (quality<max)) return min-max;
+  if ((quality==max) && (quality>min)) return min-max;
+  return 0;
+}
 
 uint16_t GasSensor::loopAction(char temp, char humidity)
 {
@@ -150,6 +168,10 @@ uint16_t GasSensor::loopAction(char temp, char humidity)
   ltmp = temp;
   lhum = humidity;
   
+  // Store quality history
+  quality_history[quality_history_pos]=quality;
+  quality_history_pos++;
+  if (quality_history_pos>=QUALITY_HISTORY) quality_history_pos=0;
   
   return lval;
 }

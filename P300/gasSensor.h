@@ -20,6 +20,8 @@
 
 #define MAX_QUALITY_JUMP 5
 
+#define QUALITY_HISTORY 20
+
 // Time in ms to first messurement (15 min in ms)
 #define SENSOR_GAS_PREHEAT_TIME  900000
 // s
@@ -36,6 +38,8 @@ class GasSensor
     int lval; // Last value
     char quality, ltmp, lhum;
     uint32_t lmillis;
+    char quality_history[QUALITY_HISTORY];
+    char quality_history_pos;
     
     
     // inital Humidity/Temperature map
@@ -59,6 +63,8 @@ class GasSensor
    uint16_t getValue();
    // read actual value
    int8_t getQuality();
+   // read actual value
+   int8_t getQualityHistoryDelta();
    // loop action
    uint16_t loopAction(char, char);
    
