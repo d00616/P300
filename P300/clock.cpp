@@ -17,16 +17,16 @@ void Clock::secondAction()
   updatetime=millis()+970; // 30 millis before next call
   if ((weekday>=0) && (!stopincrement))
   {
-    if (second++>59)
+    if (second++>=59)
     {
       second=0;
-      if (minute++>59)
+      if (minute++>=59)
       {
         minute=0;
-        if (hour++>23)
+        if (hour++>=23)
         {
           hour=0;
-          if (weekday++>7)
+          if (weekday++>=7)
           {
             weekday=1;
           }
