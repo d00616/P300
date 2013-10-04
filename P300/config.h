@@ -19,7 +19,7 @@
 // minimum time (s) between sensor readings (16 bit!)
 #define SENSOR_TIMEOUT 3
 
-// refresh time for p300 data
+// refresh time (s) for p300 data
 #define P300_REFRESH_TIME 59
 
 // number of milliseconds for setup routine
