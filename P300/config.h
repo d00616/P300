@@ -11,13 +11,16 @@
 
 // in mS 1000/4800 Baud/10 * 3,5
 #define MODBUS_TIMEOUT  7
-#define READ_TIMEOUT 40
+#define READ_TIMEOUT 20
 
-// time of inactivity before reading sensors
+// time (ms) of inactivity before reading sensors
 #define IDLE_TIMEOUT 100
 
-// minimum time between sensor readings (16 bit!)
-#define SENSOR_TIMEOUT 3000
+// minimum time (s) between sensor readings (16 bit!)
+#define SENSOR_TIMEOUT 3
+
+// refresh time for p300 data
+#define P300_REFRESH_TIME 59
 
 // number of milliseconds for setup routine
 #define SETUP_TIMEOUT 5000

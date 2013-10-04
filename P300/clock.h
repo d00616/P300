@@ -11,7 +11,8 @@
 class Clock
 {
   protected:
-    uint8_t hour,minute,second,weekday;
+    unsigned long updatetime;
+    int8_t hour,minute,second,weekday;
     bool stopincrement;
     
   public:
@@ -21,9 +22,9 @@ class Clock
    void setTime(uint8_t,uint8_t,uint8_t);
    void secondAction();
    
-   uint8_t getHour();
-   uint8_t getMinute();
-   uint8_t getSecond();
-   uint8_t getWeekday();
+   int8_t getHour();
+   int8_t getMinute();
+   int8_t getSecond();
+   int8_t getWeekday();
 };
 #endif

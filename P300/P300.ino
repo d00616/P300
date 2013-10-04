@@ -41,6 +41,7 @@ IntervalTimer Timer_clock;
 
 uint16_t idle_timer;
 uint16_t sensor_timeout;
+uint16_t p300_refresh_timeout;
 uint16_t watchdog_timer;
 bool watchdogsource;
 bool inCallbackSerial;
@@ -125,6 +126,9 @@ void setup() {
   // Set Sensor timer
   sensor_timeout=0;
   
+  // p300 refresh timeout
+  p300_refresh_timeout=0;
+  
   // Watchdog timer
   watchdog_timer=0;
   watchdogsource=false;
@@ -142,7 +146,7 @@ void setup() {
   
   // Clock timer
   clock=Clock();
-  Timer_clock.begin(timerCallbackClock, 10000000);
+  Timer_clock.begin(timerCallbackClock, 1000000);
 
   // Initialize I2C Bus
   Wire.begin();
@@ -228,7 +232,7 @@ numvar cmd_p300help(void)
         #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
          p("\tTYPE=4\tEnternal air quality sensor absolute value\r\n\tTYPE=5\tEnternal air quality sensor relative value\r\n\tTYPE=6\tEnternal air quality sensor 1 minute relative delta\r\n");
         #endif
-	p("clock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 0=Sun-6=Sat\r\nmodbus(addr[,val])\tread or write word from/to P300 register\r\n\t\tRegister: https://github.com/d00616/P300/wiki/Modbus-Register\r\n");
+	p("clock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 1=Mon-7=Sun\r\nmodbus(addr[,val])\tread or write word from/to P300 register\r\n\t\tRegister: https://github.com/d00616/P300/wiki/Modbus-Register\r\n");
   return 0;
 }
 
@@ -244,7 +248,7 @@ numvar cmd_sensor(void)
     {
         // Internal P300 sensor
         case 1:
-	  if ( (n>=0) && (n<3)) fret=p300_t[n];
+	  if ( (n>=0) && (n<4)) fret=p300_t[n];
           break;
         #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
         // External HYT Sensor
@@ -285,8 +289,20 @@ numvar cmd_sensor(void)
 // bitlash sensor function
 numvar cmd_clock(void)
 {
-  if (getarg(0)==1)
+  switch( getarg(1))
   {
+    case 0:
+        return clock.getSecond();
+        break;
+    case 1:
+        return clock.getMinute();
+        break;
+    case 2:
+        return clock.getHour();
+        break;
+    case 3:
+        return clock.getWeekday();
+        break;
   }
   return -1;
 }
@@ -294,15 +310,27 @@ numvar cmd_clock(void)
 // read or write P300 registers
 bool readwriteModbus(uint16_t address, uint8_t registercount, bool write)
 {
+  // disable interrupts
+  cli();
+
   // no double call
   if (inReadWriteModbus)
   {
+    sei();
     #ifdef DEBUG
      if (debug) p("D readwriteModbus inReadWriteModbus ret=false\r\n");
     #endif
     return false;
   }
   inReadWriteModbus=true;
+  
+  // reservation of serial port if possible
+  if (proxy_source==NULL) proxy_source=&proxy_intern;
+  // Ser proxyObj to a known state
+  resetProxyObj(&proxy_intern);
+  
+  // Enable interrupts
+  sei();
   
   char waitforbytes = 5+(registercount*2); // read answer
   
@@ -311,10 +339,7 @@ bool readwriteModbus(uint16_t address, uint8_t registercount, bool write)
   if ( (write) && (registercount>(SERIAL_BUFFER_SIZE-MODBUS_BUFFER_WRITE_START-2)/2)) return false;
   
   bool ret = false;
-  
-  // Ser proxyObj to a known state
-  resetProxyObj(&proxy_intern);
-  
+    
   // Reset CRC
   crc.clearCRC();
       
@@ -366,28 +391,25 @@ bool readwriteModbus(uint16_t address, uint8_t registercount, bool write)
     
   // CRC senden
   addWordToProxyObj(&proxy_intern, crc.getCRC(), NULL);
+  
+  // calculate and wait time for both transmissions
+//  delay( (proxy_intern.buffer_wpos*10)/P300_BAUD_RATE + MODBUS_TIMEOUT + (waitforbytes*10)/P300_BAUD_RATE );
     
   // Wait for end of send packet 
   #ifdef DEBUG
-    if (debug) p("D Wait for end of send packet\r\n");
-  #endif
-  
-  while ( ( proxy_intern.buffer_rpos>0 ) && (proxy_intern.recieve_from_p300==false))
-  {
-    // Sleep until next interrupt
-    asm volatile("wfi\r\n"::);
-  }
-    
-  // Wait for answer
-  #ifdef DEBUG
     if (debug) p("D Wait for answer\r\n");
   #endif
-  while ( ( proxy_intern.age<READ_TIMEOUT ) && (proxy_intern.buffer_wpos<waitforbytes) ) 
+  
+  // wait for incomming bytes
+  while
+    (
+      ( (proxy_intern.age<READ_TIMEOUT) && (proxy_intern.recieve_from_p300==false) ) || 
+      ( ( proxy_intern.age<READ_TIMEOUT ) && (proxy_intern.buffer_wpos<waitforbytes) && (proxy_intern.recieve_from_p300==true)  )
+    )
   {
-    // Sleep until next interrupt
-    asm volatile("wfi\r\n"::);
+    delay(MODBUS_TIMEOUT);
   }
-    
+
   // Reset wpos if nothing recieved
   if (proxy_intern.recieve_from_p300==false) proxy_intern.buffer_wpos=0;
     
@@ -417,8 +439,7 @@ bool readwriteModbus(uint16_t address, uint8_t registercount, bool write)
       // Wait for timeout for possible recursion call
       while (proxy_intern.age<READ_TIMEOUT)
       {
-        // Sleep until next interrupt
-        asm volatile("wfi\r\n"::);
+         delay(MODBUS_TIMEOUT);
       }
     }
   }
@@ -429,6 +450,13 @@ bool readwriteModbus(uint16_t address, uint8_t registercount, bool write)
      if (debug) p("D readwriteModbus return = %d\r\n",ret);
   #endif
   return ret;
+}
+
+// read Word from modbus buffer
+uint16_t readModbusWord(uint8_t address)
+{
+  uint8_t basis=MODBUS_BUFFER_READ_START+(address*2);
+  return (proxy_intern.buffer[basis]<<256)+proxy_intern.buffer[basis+1];
 }
 
 // bitlash modbus function
@@ -564,33 +592,88 @@ void loop()
    runBitlash();
   
   // Read Sensors
-  if ( (idle_timer>IDLE_TIMEOUT) && ((sensor_timeout>=SENSOR_TIMEOUT)))
+  if (idle_timer>IDLE_TIMEOUT)
   {
-    #ifdef DEBUG
-      if (debug) p("D Start reading sensors %d\r\n",millis());
-    #endif
-    
-    #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
-    for (char num_sensor=0;num_sensor<SENSOR_HYT;num_sensor++)
-    {
-      readHYT(hy_addresses[num_sensor], &hy_temp[num_sensor], &hy_humidity[num_sensor]);
-    }
-    #endif
-    
-    #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
-    for (char i=0;i<SENSOR_GAS;i++)
-    {
-      uint16_t gasval = gas_sensors[i]->loopAction((char)hy_temp[i],(char)hy_humidity[i]);
+   if (sensor_timeout>=SENSOR_TIMEOUT)
+   {
       #ifdef DEBUG
-       if (debug) p("D gas sensor %d=%d\r\n",i,gasval);
+        if (debug) p("D Start reading sensors %d\r\n",millis());
       #endif
-    }
-    #endif
+    
+      #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
+      for (char num_sensor=0;num_sensor<SENSOR_HYT;num_sensor++)
+      {
+        readHYT(hy_addresses[num_sensor], &hy_temp[num_sensor], &hy_humidity[num_sensor]);
+      }
+      #endif
+    
+      #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
+      for (char i=0;i<SENSOR_GAS;i++)
+      {
+        uint16_t gasval = gas_sensors[i]->loopAction((char)hy_temp[i],(char)hy_humidity[i]);
+        #ifdef DEBUG
+         if (debug) p("D gas sensor %d=%d\r\n",i,gasval);
+        #endif
+      }
+      #endif
 
-    #ifdef DEBUG
-      if (debug) p("D End reading sensors %d\r\n",millis());
-    #endif
-    sensor_timeout=0;
+      #ifdef DEBUG
+        if (debug) p("D End reading sensors %d\r\n",millis());
+      #endif
+      sensor_timeout=0;
+    }
+    
+    if (p300_refresh_timeout>=P300_REFRESH_TIME)
+    {
+        #ifdef DEBUG
+          if (debug) p("D Start reading p300 registers %d\r\n",millis());
+        #endif
+        // read registers
+        // https://github.com/d00616/P300/wiki/Modbus-Register
+        if (readwriteModbus(0,20,false)==true)
+        {
+          // Copy temperatures
+          for (uint8_t i=0;i<4;i++)
+          {
+              p300_t[i] = readModbusWord(i+16); // 16==T1
+              #ifdef DEBUG
+                if (debug) p("D T%d=%d\r\n",i+1,p300_t[i]);
+              #endif
+          }
+       
+          // Set time
+          uint8_t weekday=readModbusWord(2);
+          switch (weekday)
+          {
+            case 4: 
+                weekday = 3;
+                break;
+            case 8:
+                weekday = 4;
+                break;
+            case 16:
+                weekday = 5;
+                break;
+            case 32:
+                weekday = 6;
+                break;
+            case 64:
+                weekday = 7;
+                break;
+          }
+          #ifdef DEBUG
+            if (debug) p("D setTime(%d,%d,%d)\r\n",readModbusWord(3),readModbusWord(4), weekday);
+          #endif
+          clock.setTime(readModbusWord(3),readModbusWord(4),weekday);
+          
+          // free ressource
+          inReadWriteModbus=false;
+        }
+        #ifdef DEBUG
+          if (debug) p("D End reading p300 registers %d\r\n",millis());
+        #endif
+        p300_refresh_timeout=0;
+    }
   }
 
   // Crash detection, release EEPROM Value after 30 Seconds uptime
@@ -666,11 +749,15 @@ void readHYT(char address, double *temp, double *humidity)
 // Initialize ProxyObj with defined values
 void resetProxyObj(ProxyObj *obj)
 {
+  cli();
+
   // Initialize Buffer
   obj->buffer_rpos=0;
   obj->buffer_wpos=0;
   obj->age=0;
   obj->recieve_from_p300=false;
+
+  sei();
   #ifdef DEBUG
     if (debug)
     {
@@ -739,7 +826,6 @@ void timerCallbackMs() {
 //  proxy_rc.age++;
 //  proxy_intern.age++;
   idle_timer++;
-  if (sensor_timeout<=SENSOR_TIMEOUT) sensor_timeout++;
   
   // Software watchdog
   watchdog_timer++;  
@@ -862,5 +948,8 @@ void timerCallbackSerial()
 
 void timerCallbackClock()
 {
+  if (sensor_timeout<=SENSOR_TIMEOUT) sensor_timeout++;
+  if (p300_refresh_timeout<=P300_REFRESH_TIME) p300_refresh_timeout++;
+
   clock.secondAction();
 }
