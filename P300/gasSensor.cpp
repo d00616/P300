@@ -83,7 +83,7 @@ int8_t GasSensor::getQualityHistoryDelta()
   
   // return a value if quality are increasing
   if ((quality==min) && (quality<max)) return min-max;
-  if ((quality==max) && (quality>min)) return min-max;
+  if ((quality==max) && (quality>min)) return max-min;
   return 0;
 }
 
