@@ -492,7 +492,7 @@ numvar cmd_modbus(void)
     {
       if (write==false)
       {
-        ret = proxy_intern.buffer[MODBUS_BUFFER_READ_START]<<8 & proxy_intern.buffer[MODBUS_BUFFER_READ_START+1]; 
+        ret = readModbusWord(0);
         inReadWriteModbus=false;
       }
     }
