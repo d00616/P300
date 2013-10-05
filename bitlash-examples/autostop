@@ -14,7 +14,7 @@ function startup { c=0; s=0; run checkair,3000; }
 // check air qualtiy
 function checkair { if (s>0) { s--; if (s==0) { s=4; airstart(); } }; t=sensor(6,1); if (s==0) && ( ((sensor(5,1)<=80) && (t<=0)) || (t<-5)) { s=100; c++; airstop(); } }
 // stop
-function airstop {  l=modbus(0); modbus(0,0); }
+function airstop {  l=modbus(0); if (l>=0) { modbus(0,0); } else { s=0; } }
 // start
 function airstart { t=modbus(0); if (t==0) { modbus(0,l); } }
 // for watching
