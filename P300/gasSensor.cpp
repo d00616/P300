@@ -73,6 +73,7 @@ int8_t GasSensor::getQuality()
 
 int8_t GasSensor::getQualityHistoryDelta()
 {
+/* Old Idea
   int8_t min=100;
   int8_t max=0;
   for (char i=0;i<QUALITY_HISTORY;i++)
@@ -84,7 +85,15 @@ int8_t GasSensor::getQualityHistoryDelta()
   // return a value if quality are increasing
   if ((quality==min) && (quality<max)) return min-max;
   if ((quality==max) && (quality>min)) return max-min;
-  return 0;
+  return 0; */
+  
+  int avg=0;
+  for (char i=0;i<QUALITY_HISTORY;i++)
+  {
+    avg=avg+quality_history[i];
+  }
+  avg=avg/QUALITY_HISTORY;
+  return quality-avg;
 }
 
 uint16_t GasSensor::loopAction(char temp, char humidity)
