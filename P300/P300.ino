@@ -46,6 +46,7 @@ uint16_t watchdog_timer;
 bool watchdogsource;
 bool inCallbackSerial;
 bool inReadWriteModbus;
+bool stopModbus;
 uint8_t recursion_counter;
 
 // P300 sensor values
@@ -136,6 +137,7 @@ void setup() {
   // Recursion counter
   recursion_counter=0;
   inReadWriteModbus=false;
+  stopModbus=false;
   
   // Initialize 1ms timer with watchdog
   Timer_ms.begin(timerCallbackMs, 1000);
@@ -167,6 +169,7 @@ void setup() {
   addBitlashFunction("sensor", (bitlash_function) cmd_sensor);
   addBitlashFunction("clock", (bitlash_function) cmd_clock);
   addBitlashFunction("modbus", (bitlash_function) cmd_modbus);
+  addBitlashFunction("stopmodbus", (bitlash_function) cmd_stopmodbus);
   #ifdef DEBUG
     addBitlashFunction("debug", (bitlash_function) cmd_debug);
   #endif
@@ -232,7 +235,7 @@ numvar cmd_p300help(void)
         #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
          p("\tTYPE=4\tEnternal air quality sensor absolute value\r\n\tTYPE=5\tEnternal air quality sensor relative value\r\n\tTYPE=6\tEnternal air quality sensor 1 minute relative delta\r\n");
         #endif
-	p("clock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 1=Mon-7=Sun\r\nmodbus(addr[,val])\tread or write word from/to P300 register\r\n\t\t!100,000 EEPROM write cycles available!\r\n\t\tRegister: https://github.com/d00616/P300/wiki/Modbus-Register\r\n");
+	p("clock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 1=Mon-7=Sun\r\nmodbus(addr[,val])\tread or write word from/to P300 register\r\n\t\t!100,000 EEPROM write cycles available!\r\n\t\tRegister: https://github.com/d00616/P300/wiki/Modbus-Register\r\n\stopmodbus(0|1)\tStop modbus communication e.g. for calibartion\r\n");
   return 0;
 }
 
@@ -310,6 +313,9 @@ numvar cmd_clock(void)
 // read or write P300 registers
 bool readwriteModbus(uint16_t address, uint8_t registercount, bool write)
 {
+  // stop modbus communication
+  if (stopModbus) return false;
+  
   // disable interrupts
   cli();
 
@@ -462,6 +468,9 @@ uint16_t readModbusWord(uint8_t address)
 // bitlash modbus function
 numvar cmd_modbus(void)
 {
+  // stop modbus communication
+  if (stopModbus) return -3;
+  
   // endless loop protection
   if (recursion_counter>3) return -2;
   recursion_counter++;
@@ -508,6 +517,15 @@ numvar cmd_modbus(void)
   // Wrong arguments
   recursion_counter--;
   return ret;
+}
+
+numvar cmd_stopmodbus(void)
+{
+  numvar ret = stopModbus;
+  if (getarg(0)==1)
+  {
+    stopModbus=getarg(1);
+  }
 }
 
 // bitlash debug function
