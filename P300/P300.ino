@@ -235,7 +235,7 @@ numvar cmd_p300help(void)
         #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
          p("\tTYPE=4\tEnternal air quality sensor absolute value\r\n\tTYPE=5\tEnternal air quality sensor relative value\r\n\tTYPE=6\tEnternal air quality sensor 1 minute relative delta\r\n");
         #endif
-	p("clock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 1=Mon-7=Sun\r\nmodbus(addr[,val])\tread or write word from/to P300 register\r\n\t\t!100,000 EEPROM write cycles available!\r\n\t\tRegister: https://github.com/d00616/P300/wiki/Modbus-Register\r\n\stopmodbus(0|1)\tStop modbus communication e.g. for calibartion\r\n");
+	p("\tTYPE=7\tS1/S2\r\nclock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 1=Mon-7=Sun\r\nmodbus(addr[,val])\tread or write word from/to P300 register\r\n\t\t!100,000 EEPROM write cycles available!\r\n\t\tRegister: https://github.com/d00616/P300/wiki/Modbus-Register\r\n\stopmodbus(0|1)\tStop modbus communication e.g. for calibartion\r\n");
   return 0;
 }
 
@@ -274,6 +274,10 @@ numvar cmd_sensor(void)
           if ( (n>=0) && (n<SENSOR_GAS)) fret=gas_sensors[n]->getQualityHistoryDelta();
           break;
         #endif      
+        // Internal P300 sensor
+        case 7:
+	  if ( (n>=0) && (n<2)) fret=p300_s[n];
+          break;
     }
     // multiplication
     if (getarg(0)>2)
@@ -648,7 +652,7 @@ void loop()
         #endif
         // read registers
         // https://github.com/d00616/P300/wiki/Modbus-Register
-        if (readwriteModbus(0,20,false)==true)
+        if (readwriteModbus(0,22,false)==true)
         {
           // Copy temperatures
           for (uint8_t i=0;i<4;i++)
@@ -656,6 +660,14 @@ void loop()
               p300_t[i] = readModbusWord(i+16); // 16==T1
               #ifdef DEBUG
                 if (debug) p("D T%d=%d\r\n",i+1,p300_t[i]);
+              #endif
+          }
+          // Copy S1/S2
+          for (uint8_t i=0;i<2;i++)
+          {
+              p300_s[i] = readModbusWord(i+20)*2; // 20==T1
+              #ifdef DEBUG
+                if (debug) p("D S%d=%d\r\n",i+1,p300_s[i]);
               #endif
           }
        
