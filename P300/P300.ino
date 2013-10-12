@@ -462,7 +462,7 @@ bool readwriteModbus(uint16_t address, uint8_t registercount, bool write)
 uint16_t readModbusWord(uint8_t address)
 {
   uint8_t basis=MODBUS_BUFFER_READ_START+(address*2);
-  return (proxy_intern.buffer[basis]<<256)+proxy_intern.buffer[basis+1];
+  return (proxy_intern.buffer[basis]<<8)+proxy_intern.buffer[basis+1];
 }
 
 // bitlash modbus function
