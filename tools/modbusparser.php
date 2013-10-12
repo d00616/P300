@@ -31,7 +31,8 @@ function restisterparser($address, $value, &$txt = false )
                         64 => 'Su'
                          
                  );
-                 $txt[]="Weekday:".$wd[$value];
+                 if (isset($wd[$value])) $txt[]="Weekday:".$wd[$value];
+                         else $txt[]="Weekday $value";
                  break;
          case 3:
                  $txt[]="Hour:".$value;
@@ -66,6 +67,14 @@ function restisterparser($address, $value, &$txt = false )
          case 24:
                  $txt[]="Heizregister:".$value;
                  break;
+         case 25:
+                 $stat=array(
+                         '0'=>"unkalibriert",
+                         '2'=>"kalibrierung aktiv",
+                         '3'=>"kalibriert"
+                 );
+                 if (isset($stat[$value])) $txt[]=$stat[$value];
+                         else $txt[]="Kalibrierung=$value";
          case 0x413:
                  $txt[]="Countdown:".$value;
                  break;
