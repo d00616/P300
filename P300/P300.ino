@@ -43,6 +43,9 @@ uint16_t idle_timer;
 uint16_t sensor_timeout;
 uint16_t p300_refresh_timeout;
 uint16_t watchdog_timer;
+#ifdef CALIBRATION_TIME
+  uint16_t calibration_timer;
+#endif
 bool watchdogsource;
 bool inCallbackSerial;
 bool inReadWriteModbus;
@@ -130,6 +133,11 @@ void setup() {
   // p300 refresh timeout
   p300_refresh_timeout=0;
   
+  #ifdef CALIBRATION_TIME
+    // calibration timer
+    calibration_timer=0;
+  #endif
+
   // Watchdog timer
   watchdog_timer=0;
   watchdogsource=false;
@@ -230,12 +238,18 @@ numvar cmd_p300help(void)
         #endif
          p("sensor(TYPE,NUM[,MULTIPLICATOR])\r\n\tRead value of sensor TYPE,NUM\r\n\tTYPE=1\tInternal temperature sensor\r\n");
         #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
-         p("\tTYPE=2\tExternal temperature sensor\r\n\tTYPE=3\tEnternal humidity sensor\r\n");
+         p("\tTYPE=2\tExternal temperature sensor\r\n\tTYPE=3\tExternal humidity sensor\r\n");
         #endif
         #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
-         p("\tTYPE=4\tEnternal air quality sensor absolute value\r\n\tTYPE=5\tEnternal air quality sensor relative value\r\n\tTYPE=6\tEnternal air quality sensor 1 minute relative delta\r\n");
+         p("\tTYPE=4\tExternal air quality sensor absolute value\r\n\tTYPE=5\tExternal air quality sensor relative value\r\n\tTYPE=6\tExternal air quality sensor 3 minute relative delta\r\n");
         #endif
-	p("\tTYPE=7\tS1/S2\r\nclock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 1=Mon-7=Sun\r\nmodbus(addr[,val])\tread or write word from/to P300 register\r\n\t\t!100,000 EEPROM write cycles available!\r\n\t\tRegister: https://github.com/d00616/P300/wiki/Modbus-Register\r\n\stopmodbus(0|1)\tStop modbus communication e.g. for calibartion\r\n");
+  	 p("\tTYPE=7\tS1/S2\r\nclock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 1=Mon-7=Sun\r\nmodbus(addr[,val])\tread or write word from/to P300 register\r\n\t\t!100,000 EEPROM write cycles available!\r\n\t\tRegister: https://github.com/d00616/P300/wiki/Modbus-Register\r\n");
+        #ifdef CALIBRATION_TIME
+	 p("stopmodbus(0|1|2)\tStop modbus communication e.g. for calibartion (2=reset calibration timer)\r\n");
+        #else
+	 p("stopmodbus(0|1)\tStop modbus communication e.g. for calibartion\r\n");
+        #endif
+
   return 0;
 }
 
@@ -475,6 +489,11 @@ numvar cmd_modbus(void)
   // stop modbus communication
   if (stopModbus) return -3;
   
+  #ifdef CALIBRATION_TIME
+    // in Calibration
+    if (calibration_timer>0) return -4;
+  #endif
+  
   // endless loop protection
   if (recursion_counter>3) return -2;
   recursion_counter++;
@@ -528,7 +547,11 @@ numvar cmd_stopmodbus(void)
   numvar ret = stopModbus;
   if (getarg(0)==1)
   {
-    stopModbus=getarg(1);
+    if (getarg(1)!=2) stopModbus=getarg(1);
+     #ifdef CALIBRATION_TIME
+      // force stop calibration timer until next calibration dedection
+      else calibration_timer=0;
+     #endif
   }
 }
 
@@ -644,61 +667,90 @@ void loop()
       #endif
       sensor_timeout=0;
     }
-    
-    if (p300_refresh_timeout>=P300_REFRESH_TIME)
+
+    #ifdef CALIBRATION_TIME  
+      if ( (p300_refresh_timeout>=P300_REFRESH_TIME) && (inReadWriteModbus==false) && (calibration_timer==0) )
+    #else
+      if ( (p300_refresh_timeout>=P300_REFRESH_TIME) && (inReadWriteModbus==false) )
+    #endif
     {
         #ifdef DEBUG
           if (debug) p("D Start reading p300 registers %d\r\n",millis());
         #endif
-        // read registers
-        // https://github.com/d00616/P300/wiki/Modbus-Register
-        if (readwriteModbus(0,22,false)==true)
+        
+        #ifdef CALIBRATION_TIME  
+        // Check for calibration
+        if (readwriteModbus(22, 1, false))
         {
-          // Copy temperatures
-          for (uint8_t i=0;i<4;i++)
+          if (readModbusWord(0)!=3)
           {
-              p300_t[i] = readModbusWord(i+16); // 16==T1
-              #ifdef DEBUG
-                if (debug) p("D T%d=%d\r\n",i+1,p300_t[i]);
-              #endif
+            // Skip reading modbus next time
+            calibration_timer = CALIBRATION_TIME;
+            inReadWriteModbus=false;
+            
+            #ifdef DEBUG
+              if (debug) p("D Calibration in progress skip reading modbus\r\n");
+            #endif
           }
-          // Copy S1/S2
-          for (uint8_t i=0;i<2;i++)
-          {
-              p300_s[i] = readModbusWord(i+20)*2; // 20==T1
-              #ifdef DEBUG
-                if (debug) p("D S%d=%d\r\n",i+1,p300_s[i]);
-              #endif
-          }
-       
-          // Set time
-          uint8_t weekday=readModbusWord(2);
-          switch (weekday)
-          {
-            case 4: 
-                weekday = 3;
-                break;
-            case 8:
-                weekday = 4;
-                break;
-            case 16:
-                weekday = 5;
-                break;
-            case 32:
-                weekday = 6;
-                break;
-            case 64:
-                weekday = 7;
-                break;
-          }
-          #ifdef DEBUG
-            if (debug) p("D setTime(%d,%d,%d)\r\n",readModbusWord(3),readModbusWord(4), weekday);
+            else
           #endif
-          clock.setTime(readModbusWord(3),readModbusWord(4),weekday);
+          {
+            // Free modbus
+            inReadWriteModbus=false;
+
+            // read registers
+            // https://github.com/d00616/P300/wiki/Modbus-Register
+            if (readwriteModbus(0,22,false)==true)
+            {
+              // Copy temperatures
+              for (uint8_t i=0;i<4;i++)
+              {
+                p300_t[i] = readModbusWord(i+16); // 16==T1
+                #ifdef DEBUG
+                  if (debug) p("D T%d=%d\r\n",i+1,p300_t[i]);
+                #endif
+              }
+              // Copy S1/S2
+              for (uint8_t i=0;i<2;i++)
+              {
+                  p300_s[i] = readModbusWord(i+20)*2; // 20==T1
+                  #ifdef DEBUG
+                    if (debug) p("D S%d=%d\r\n",i+1,p300_s[i]);
+                  #endif
+              }
+       
+              // Set time
+              uint8_t weekday=readModbusWord(2);
+              switch (weekday)
+              {
+                case 4: 
+                  weekday = 3;
+                  break;
+                case 8:
+                  weekday = 4;
+                  break;
+                case 16:
+                  weekday = 5;
+                  break;
+                case 32:
+                  weekday = 6;
+                  break;
+                case 64:
+                  weekday = 7;
+                  break;
+              }
+              #ifdef DEBUG
+                if (debug) p("D setTime(%d,%d,%d)\r\n",readModbusWord(3),readModbusWord(4), weekday);
+              #endif
+              clock.setTime(readModbusWord(3),readModbusWord(4),weekday);
           
-          // free ressource
-          inReadWriteModbus=false;
+              // free ressource
+              inReadWriteModbus=false;
+            }
+          }
+        #ifdef CALIBRATION_TIME
         }
+        #endif
         #ifdef DEBUG
           if (debug) p("D End reading p300 registers %d\r\n",millis());
         #endif
@@ -980,6 +1032,9 @@ void timerCallbackClock()
 {
   if (sensor_timeout<=SENSOR_TIMEOUT) sensor_timeout++;
   if (p300_refresh_timeout<=P300_REFRESH_TIME) p300_refresh_timeout++;
+  #ifdef CALIBRATION_TIME
+    if (calibration_timer>0) calibration_timer--;
+  #endif
 
   clock.secondAction();
 }

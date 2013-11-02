@@ -13,6 +13,10 @@
 #define MODBUS_TIMEOUT  7
 #define READ_TIMEOUT 20
 
+// time of calibartion (s)
+// when defined modbus communication is stopped at dedected calibration
+#define CALIBRATION_TIME 900
+
 // time (ms) of inactivity before reading sensors
 #define IDLE_TIMEOUT 100
 

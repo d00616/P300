@@ -20,7 +20,8 @@
 
 #define MAX_QUALITY_JUMP 5
 
-#define QUALITY_HISTORY 20
+// for dedection of fast quality changes (20 per minute)
+#define QUALITY_HISTORY 60
 
 // Time in ms to first messurement (15 min in ms)
 #define SENSOR_GAS_PREHEAT_TIME  900000
