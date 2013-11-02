@@ -13,7 +13,7 @@
 #define MODBUS_TIMEOUT  7
 #define READ_TIMEOUT 20
 
-// time of calibartion (s)
+// time to stop modbus communication when calibartion is running (s)
 // when defined modbus communication is stopped at dedected calibration
 #define CALIBRATION_TIME 900
 
@@ -23,7 +23,7 @@
 // minimum time (s) between sensor readings (16 bit!)
 #define SENSOR_TIMEOUT 3
 
-// refresh time (s) for p300 data
+// refresh time (s) for p300 data (59 seconds to learn seconds from P300 clock)
 #define P300_REFRESH_TIME 59
 
 // number of milliseconds for setup routine

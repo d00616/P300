@@ -668,7 +668,7 @@ void loop()
       sensor_timeout=0;
     }
 
-    #ifdef CALIBRATION_TIME  
+    #ifdef CALIBRATION_TIME
       if ( (p300_refresh_timeout>=P300_REFRESH_TIME) && (inReadWriteModbus==false) && (calibration_timer==0) )
     #else
       if ( (p300_refresh_timeout>=P300_REFRESH_TIME) && (inReadWriteModbus==false) )
@@ -680,7 +680,7 @@ void loop()
         
         #ifdef CALIBRATION_TIME  
         // Check for calibration
-        if (readwriteModbus(22, 1, false))
+        if (readwriteModbus(25, 1, false))
         {
           if (readModbusWord(0)!=3)
           {
