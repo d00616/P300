@@ -102,13 +102,13 @@ werden. Eine aktuelle Liste der bekannten Register ist unter
 https://github.com/d00616/P300/wiki/Modbus-Register abrufbar.
 
 Die Lüfterstufe kann mit folgendem Kommando abgefragt und beschrieben werden:
-  > print modbus(0)
+  # print modbus(0)
   2
-  > modbus(0,1)
+  # modbus(0,1)
 
 Die Werte des Modbus-Kommandos dürfen nur weiter verarbeitet werden, wenn diese
->=0 sind. Werte kleiner 0 werden bei Fehlern oder laufender Kalibrierung zurück
-gegeben.
+größer oder gleich 0 sind. Werte kleiner 0 werden bei Fehlern oder laufender
+Kalibrierung zurück gegeben.
 
 Hinweise
 ========
