@@ -25,9 +25,12 @@ die Rückseite mit einer Folie oder einem dicken Blatt Papier zu isolieren.
 Software
 ========
 
-Die Software wurde mit Arduino 1.0.5/Teensyduino 1.16  erstellt.
-http://www.pjrc.com/teensy/td_download.html Das Verzeichnis „P300“ muss in
-das Sketch-Verzeichnis der Arduino Umgebung kopiert werden.
+Die Software wurde mit Arduino 1.0.5/Teensyduino 1.16 erstellt. Die Teensy
+Installation muss inklusive der Library "IntervalTimer" durchgeführt werden.
+http://www.pjrc.com/teensy/td_download.html
+
+Das Verzeichnis „P300“ muss in das Sketch-Verzeichnis der Arduino Umgebung
+kopiert werden.
 
 Des Weiteren muss Bitlash in das Sketch-Verzeichnis unter "libraries" abgelegt
 werden. http://bitlash.net
