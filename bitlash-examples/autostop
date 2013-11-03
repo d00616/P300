@@ -1,7 +1,7 @@
 // Anhalten der Anlage wenn die Luftqualität unter 80 sinkt
 // oder das 1 Minuten Delta <-5 ist.
 // Die minimale stopzeit betraegt 5 Minuten (100)
-// Die minimale wiederanlaufzeit betraegt 12 Sekunden (4)
+// Die minimale wiederanlaufzeit betraegt 24 Sekunden (8)
 //
 // Variablen:
 //	s = Stop status
@@ -10,12 +10,12 @@
 //	c = counter
 //
 // Initial function
-function startup { c=0; s=0; run checkair,3000; }
+function startup{c=0;s=0;run checkair,3000;}
 // check air qualtiy
-function checkair { if (s>0) { s--; if (s==0) { s=4; airstart(); } }; t=sensor(6,1); if (s==0) && ( ((sensor(5,1)<=80) && (t<=0)) || (t<-5)) { s=100; c++; airstop(); } }
+function checkair{if (s>0){s--;if(s==8)airstart();}else{t=sensor(6,1);if(((sensor(5,1)<=80)&&(t<=0))||(t<-5)){s=100+8;c++;airstop();}}}
 // stop
-function airstop {  l=modbus(0); if (l>=0) { modbus(0,0); } else { s=0; } }
+function airstop{l=modbus(0);if(l>=0){modbus(0,0);}}
 // start
-function airstart { t=modbus(0); if (t==0) { modbus(0,l); } }
+function airstart{if(modbus(0)==0){modbus(0,l);}}
 // for watching
-function printquality { print clock(3)," ",clock(2)," ",clock(1)," ",clock(0)," ",sensor(4,1)," ",sensor(5,1)," ",sensor(6,1)," ",modbus(0); };
+function printquality{print clock(3)," ",clock(2)," ",clock(1)," ",clock(0)," ",sensor(4,1)," ",sensor(5,1)," ",sensor(6,1)," ",modbus(0)," ",s;};
