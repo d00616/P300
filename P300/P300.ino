@@ -55,6 +55,7 @@ uint8_t recursion_counter;
 // P300 sensor values
 int8_t p300_t[4]={-100,-100,-100,-100};
 uint16_t p300_s[2]={0,0};
+int8_t p300_volume_flow_rate=0;
 
 // HYT-221 sensors
 #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
@@ -147,6 +148,9 @@ void setup() {
   inReadWriteModbus=false;
   stopModbus=false;
   
+  // set this to volume flow rate 2
+  p300_volume_flow_rate=2;
+ 
   // Initialize 1ms timer with watchdog
   Timer_ms.begin(timerCallbackMs, 1000);
   
@@ -224,7 +228,7 @@ void reboot()
 numvar cmd_p300help(void)
 {
         p(
-          "P300 Controller Build=\"" __DATE__ " " __TIME__ "\"\r\n"
+          "P300 Controller Release=2.0.1 Build=\"" __DATE__ " " __TIME__ "\"\r\n"
           "Commands:\r\n"
           "p300help\r\n"
           "flash\t\tReboot to loader\r\n"
@@ -243,7 +247,7 @@ numvar cmd_p300help(void)
         #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
          p("\tTYPE=4\tExternal air quality sensor absolute value\r\n\tTYPE=5\tExternal air quality sensor relative value\r\n\tTYPE=6\tExternal air quality sensor 3 minute relative delta\r\n");
         #endif
-  	 p("\tTYPE=7\tS1/S2\r\nclock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 1=Mon-7=Sun\r\nmodbus(addr[,val])\tread or write word from/to P300 register\r\n\t\t!100,000 EEPROM write cycles available!\r\n\t\tRegister: https://github.com/d00616/P300/wiki/Modbus-Register\r\n");
+  	 p("\tTYPE=7\tS1/S2\r\n\tTYPE=8\tVolume flow rate\r\nclock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 1=Mon-7=Sun\r\nmodbus(addr[,val])\tread or write word from/to P300 register\r\n\t\t!100,000 EEPROM write cycles available!\r\n\t\tRegister: https://github.com/d00616/P300/wiki/Modbus-Register\r\n");
         #ifdef CALIBRATION_TIME
 	 p("stopmodbus(0|1|2)\tStop modbus communication e.g. for calibartion (2=reset calibration timer)\r\n");
         #else
@@ -291,6 +295,10 @@ numvar cmd_sensor(void)
         // Internal P300 sensor
         case 7:
 	  if ( (n>=0) && (n<2)) fret=p300_s[n];
+          break;
+        // Volume flow rate level
+        case 8:
+          fret=p300_volume_flow_rate;
           break;
     }
     // multiplication
@@ -653,7 +661,8 @@ void loop()
       #endif
     
       #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
-      for (char i=0;i<SENSOR_GAS;i++)
+      // read only when p300 is not stopped
+      if (p300_volume_flow_rate>0) for (char i=0;i<SENSOR_GAS;i++)
       {
         uint16_t gasval = gas_sensors[i]->loopAction((char)hy_temp[i],(char)hy_humidity[i]);
         #ifdef DEBUG
@@ -702,6 +711,9 @@ void loop()
             // https://github.com/d00616/P300/wiki/Modbus-Register
             if (readwriteModbus(0,22,false)==true)
             {
+              // Copy volume flow rate
+              p300_volume_flow_rate=readModbusWord(0);
+              
               // Copy temperatures
               for (uint8_t i=0;i<4;i++)
               {
