@@ -125,6 +125,9 @@ des Sensors ab. Um das zu Komensieren wird eine interne Tabelle aufgebaut.
 Ist die Luftqualität über einen längeren Zeitraum schlecht kann diese sich
 mit der Zeit an 100% angleichen.
 
+Wenn ein Bitlash-Syntaxfehler auftritt werden alle Hintergrundprozesse gestoppt.
+"startup" muss dann manuell aufgerufen werden.
+
 Weitere Informationen über die Entstehung und Verwendung des Projektes ist unter 
 http://knx-user-forum.de/knx-eib-forum/24699-pluggit-lueftungsanlage-anbinden.html
 zu finden.
