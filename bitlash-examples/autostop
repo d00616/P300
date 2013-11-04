@@ -19,3 +19,5 @@ function airstop{l=modbus(0);if(l>=0){modbus(0,0);}}
 function airstart{if(modbus(0)==0){modbus(0,l);}}
 // for watching
 function printquality{print clock(3)," ",clock(2)," ",clock(1)," ",clock(0)," ",sensor(4,1)," ",sensor(5,1)," ",sensor(6,1)," ",modbus(0)," ",s;};
+// statistics (x=starttime, y=stoptime)
+function countstat{if(s>0){y++;}else x++;}
