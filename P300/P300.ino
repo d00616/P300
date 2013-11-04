@@ -8,6 +8,8 @@
  *
  *
  */
+#define RELEASE "2.0.2"
+
 #include "config.h"
 #include <stdarg.h>
 #include <Wire.h>
@@ -228,7 +230,7 @@ void reboot()
 numvar cmd_p300help(void)
 {
         p(
-          "P300 Controller Release=2.0.1 Build=\"" __DATE__ " " __TIME__ "\"\r\n"
+          "P300 Controller Release=" RELEASE " Build=\"" __DATE__ " " __TIME__ "\"\r\n"
           "Commands:\r\n"
           "p300help\r\n"
           "flash\t\tReboot to loader\r\n"
@@ -481,6 +483,10 @@ bool readwriteModbus(uint16_t address, uint8_t registercount, bool write)
   #ifdef DEBUG
      if (debug) p("D readwriteModbus return = %d\r\n",ret);
   #endif
+  
+  // Force refresh when written to address 0 for better gas sensor statistics
+  if ( (write==true) && (address==0) ) p300_refresh_timeout=P300_REFRESH_TIME;
+  
   return ret;
 }
 
