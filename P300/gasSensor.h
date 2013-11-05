@@ -53,8 +53,8 @@ class GasSensor
      uint32_t millis();
      uint16_t analogRead(int);
 #endif
-    uint16_t htmap[HT_MAP_COUNT_HUM][HT_MAP_COUNT_TEMP];
-    uint16_t htmap_time[HT_MAP_COUNT_HUM][HT_MAP_COUNT_TEMP];
+    uint16_t htmap_avg[HT_MAP_COUNT_HUM][HT_MAP_COUNT_TEMP];
+    uint16_t htmap_max[HT_MAP_COUNT_HUM][HT_MAP_COUNT_TEMP];
     int32_t mapresettime;
 
   public:

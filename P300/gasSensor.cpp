@@ -33,30 +33,40 @@ GasSensor::GasSensor(char indexnumber, int pinnumber)
      for (char i=0; i<QUALITY_HISTORY;i++) quality_history[i]=100;
      quality_history_pos=0;
 
+     // Reset htmap
      mapresettime=MAP_RESET_TIME;
- 
      for (uint8_t hum=0; hum<HT_MAP_COUNT_HUM; hum++)
      {
        for (uint8_t temp=0; temp<HT_MAP_COUNT_TEMP; temp++)
        {
-         htmap[hum][temp]=65535;
-         htmap_time[hum][temp]=65535;
+         htmap_avg[hum][temp]=65535;
+         htmap_max[hum][temp]=65535;
        }
      }
 
 }
 
+// Write a value to htmap
 void GasSensor::sethtmap(char temp, char hum, uint16_t val)
 {
   char hpos = (hum-HT_MAP_MIN_HUM)/HT_MAP_DIV_HUM;
   if ((hpos<0) || (hpos>=HT_MAP_COUNT_HUM)) return;
   char tpos = (temp-HT_MAP_MIN_TEMP)/HT_MAP_DIV_TEMP;
   if ((tpos<0) || (tpos>=HT_MAP_COUNT_TEMP)) return;
-
-  if (htmap_time[hpos][tpos]>val)
+  
+  // neuer wert -> berechnen nach vorherigem Wert
+  if ( (quality<100) && (htmap_avg[hpos][tpos]==65535) )
   {
-      htmap_time[hpos][tpos]=val;  
-      if (htmap[hpos][tpos]>val) htmap[hpos][tpos]=val;
+    htmap_avg[hpos][tpos] = htmap_max[hpos][tpos] = (int)((float)lval/(float)quality)*val;
+  }
+
+  // höchsten Wert für 100% finden
+  if (val<htmap_max[hpos][tpos])
+  {
+      htmap_max[hpos][tpos]=val;
+      
+      // new 100%?
+      if (val<htmap_avg[hpos][tpos]) htmap_avg[hpos][tpos]=val; 
   }
 }
 
@@ -107,15 +117,15 @@ uint16_t GasSensor::loopAction(char temp, char humidity)
     {
       mapresettime = MAP_RESET_TIME;
     
-     // htmap_time -> htmap
+     // htmap_max -> htmap_avg
      for (uint8_t hum=0; hum<HT_MAP_COUNT_HUM; hum++)
      {
        for (uint8_t temp=0; temp<HT_MAP_COUNT_TEMP; temp++)
        {
-         if (htmap_time[hum][temp]<65535)
+         if (htmap_max[hum][temp]<65535)
          {
-           htmap[hum][temp]=(htmap[hum][temp]+htmap_time[hum][temp])/2;
-           htmap_time[hum][temp]=65535;
+           htmap_avg[hum][temp]=(uint16_t)(((long)htmap_avg[hum][temp]*5+(long)htmap_max[hum][temp])/6);
+           htmap_max[hum][temp]=65535;
          }
        }
      }
@@ -133,7 +143,7 @@ uint16_t GasSensor::loopAction(char temp, char humidity)
      }
        else
      {
-        return 65536;
+        return 65535;
      }
   }
 #endif
@@ -163,17 +173,11 @@ uint16_t GasSensor::loopAction(char temp, char humidity)
   if (tpos<0) tpos=0;
   if (tpos>=HT_MAP_COUNT_TEMP) tpos=HT_MAP_COUNT_TEMP-1;
   
-  // New value?
-  if ((htmap[hpos][tpos]==65536) && (quality<100))
-  {
-    sethtmap(temp,humidity,(int)((float)lval/(float)quality)*tmp);
-  }
-
+  // Write htmap
   lval = tmp;
-  sethtmap(temp,humidity,tmp);
-  
+  sethtmap(temp,humidity,tmp);  
 
-  quality = ( (float)htmap[hpos][tpos]/(float)lval)*100;
+  quality = ( (float)htmap_avg[hpos][tpos]/(float)lval)*100;
   ltmp = temp;
   lhum = humidity;
   

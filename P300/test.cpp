@@ -16,7 +16,7 @@ uint8_t buf[] = {01,03,00,05,00,02,0xd4,0x0a};
 
 void printhtmap()
 {
-    cout << "HTMAP: " << sizeof(GasSensor::htmap) << " Bytes" << endl;
+    cout << "HTMAP: " << sizeof(GasSensor::htmap_avg) << " Bytes" << endl;
   cout << "°C  %";
   for (uint8_t hum=0; hum<HT_MAP_COUNT_HUM; hum++)
   {
@@ -29,7 +29,7 @@ void printhtmap()
     cout << setw(3) << (int)((temp*HT_MAP_DIV_TEMP)+HT_MAP_MIN_TEMP) << "  ";
     for (uint8_t hum=0; hum<HT_MAP_COUNT_HUM; hum++)
     {
-      cout << setw(6) << (int)gas.htmap[hum][temp];
+      cout << setw(6) << (int)gas.htmap_avg[hum][temp];
     }
     cout <<endl;
   }
