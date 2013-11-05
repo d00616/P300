@@ -54,12 +54,6 @@ void GasSensor::sethtmap(char temp, char hum, uint16_t val)
   char tpos = (temp-HT_MAP_MIN_TEMP)/HT_MAP_DIV_TEMP;
   if ((tpos<0) || (tpos>=HT_MAP_COUNT_TEMP)) return;
   
-  // neuer wert -> berechnen nach vorherigem Wert
-  if ( (quality<100) && (htmap_avg[hpos][tpos]==65535) )
-  {
-    htmap_avg[hpos][tpos] = htmap_max[hpos][tpos] = (int)((float)lval/(float)quality)*val;
-  }
-
   // höchsten Wert für 100% finden
   if (val<htmap_max[hpos][tpos])
   {
@@ -108,16 +102,17 @@ int8_t GasSensor::getQualityHistoryDelta()
 
 uint16_t GasSensor::loopAction(char temp, char humidity)
 {
-  // Time calculation
+  // Quality calculation after MAP_RESET_TIME
   uint32_t start_millis = millis();
   if (start_millis>lmillis)
   {
     mapresettime=mapresettime-((start_millis-lmillis)/1000);      
     if (mapresettime<=0)
     {
+      // reset counter
       mapresettime = MAP_RESET_TIME;
     
-     // htmap_max -> htmap_avg
+     // htmap_max -> htmap_avg calucation
      for (uint8_t hum=0; hum<HT_MAP_COUNT_HUM; hum++)
      {
        for (uint8_t temp=0; temp<HT_MAP_COUNT_TEMP; temp++)
@@ -175,9 +170,31 @@ uint16_t GasSensor::loopAction(char temp, char humidity)
   
   // Write htmap
   lval = tmp;
-  sethtmap(temp,humidity,tmp);  
+  sethtmap(temp,humidity,tmp);
+  
+  // Rule check to avoid jumps in table
+  int ruleval = htmap_avg[hpos][tpos];
+  if ( (hpos>0) && (tpos>0) &&  (hpos<HT_MAP_COUNT_HUM-1) && (tpos<HT_MAP_COUNT_TEMP-1))
+  {
+    // hpos-1 must be less
+    if (htmap_avg[hpos-1][tpos]>ruleval) htmap_avg[hpos-1][tpos]=ruleval;
+    // tpos-1 must be less
+    if (htmap_avg[hpos][tpos-1]>ruleval) htmap_avg[hpos][tpos-1]=ruleval;
+    // hpos-1,tpos-1 must be less
+    if (htmap_avg[hpos-1][tpos-1]>ruleval) htmap_avg[hpos-1][tpos-1]=ruleval;    
+    // hpos+1 must be greater
+    if (htmap_avg[hpos+1][tpos]<ruleval) htmap_avg[hpos][tpos-1]=ruleval;
+    // tpos +1 must be greater
+    if (htmap_avg[hpos][tpos+1]<ruleval) htmap_avg[hpos][tpos+1]=ruleval;
+    // hpos+1,tpos +1 must be greater
+    if (htmap_avg[hpos+1][tpos+1]<ruleval) htmap_avg[hpos+1][tpos+1]=ruleval;
+    // hpos-1,tpos +1 must be greater
+    if (htmap_avg[hpos-1][tpos+1]<ruleval) htmap_avg[hpos-1][tpos+1]=ruleval;
+    // hpos+1,tpos-1 must be less
+    if (htmap_avg[hpos+1][tpos-1]>ruleval) htmap_avg[hpos+1][tpos-1]=ruleval;
+  }
 
-  quality = ( (float)htmap_avg[hpos][tpos]/(float)lval)*100;
+  quality = ( (float)ruleval/(float)lval)*100;
   ltmp = temp;
   lhum = humidity;
   
