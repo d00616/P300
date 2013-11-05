@@ -119,7 +119,7 @@ uint16_t GasSensor::loopAction(char temp, char humidity)
        {
          if (htmap_max[hum][temp]<65535)
          {
-           htmap_avg[hum][temp]=(uint16_t)(((unsigned long)htmap_avg[hum][temp]*9+(unsigned long)htmap_max[hum][temp])/10);
+           htmap_avg[hum][temp]=(uint16_t)(((unsigned long)htmap_avg[hum][temp]*(MAP_RESET_AVG_COUNT-1)+(unsigned long)htmap_max[hum][temp])/MAP_RESET_AVG_COUNT);
            htmap_max[hum][temp]=65535;
          }
        }
