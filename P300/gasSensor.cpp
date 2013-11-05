@@ -172,7 +172,7 @@ uint16_t GasSensor::loopAction(char temp, char humidity)
   lval = tmp;
   sethtmap(temp,humidity,tmp);
   
-  // Rule check to avoid jumps in table
+  // Rule check to avoid jumps in table, check actual cell against neighbours
   int ruleval = htmap_avg[hpos][tpos];
   if ( (hpos>0) && (tpos>0) &&  (hpos<HT_MAP_COUNT_HUM-1) && (tpos<HT_MAP_COUNT_TEMP-1))
   {

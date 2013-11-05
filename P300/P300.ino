@@ -230,7 +230,7 @@ void reboot()
 numvar cmd_p300help(void)
 {
         p(
-          "P300 Controller Release=" RELEASE " Build=\"" __DATE__ " " __TIME__ "\"\r\n"
+          "P300 Controller Release=\"" RELEASE "\" Build=\"" __DATE__ " " __TIME__ "\"\r\n"
           "Commands:\r\n"
           "p300help\r\n"
           "flash\t\tReboot to loader\r\n"
