@@ -240,6 +240,9 @@ numvar cmd_p300help(void)
           p(
             "debug(0|1)\tdisable|enable debug messages\r\n"
             "debug(10)\tDump internal variables\r\n"
+            #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
+            "debug(11)\tDump gas sensor quality map\r\n"
+            #endif
           ); 
         #endif
          p("sensor(TYPE,NUM[,MULTIPLICATOR])\r\n\tRead value of sensor TYPE,NUM\r\n\tTYPE=1\tInternal temperature sensor\r\n");
@@ -607,6 +610,32 @@ numvar cmd_debug(void)
            watchdog_timer
          );
         break;
+      #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
+      case 11:
+        // dump htmap
+        for (char i=0;i<SENSOR_GAS;i++)
+        {
+          // head
+          p("Sensor %d:\r\n T %%",(uint8_t)(i+1));
+          for (uint8_t hum=0; hum<HT_MAP_COUNT_HUM; hum++)
+          {
+            p("%6d",(int)((hum*HT_MAP_DIV_HUM)+HT_MAP_MIN_HUM));
+          }
+          p("\r\n");
+          
+          // data
+          for (uint8_t temp=0; temp<HT_MAP_COUNT_TEMP; temp++)
+          {
+            p("%3d ", (int)((temp*HT_MAP_DIV_TEMP)+HT_MAP_MIN_TEMP));
+            for (uint8_t hum=0; hum<HT_MAP_COUNT_HUM; hum++)
+            {
+              p("%6d", (int)gas_sensors[i]->htmap_avg[hum][temp]);
+            }
+            p("\r\n");
+          }
+        }
+        break;
+        #endif
     }
   }
   return ret;
