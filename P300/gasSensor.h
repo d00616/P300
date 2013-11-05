@@ -25,6 +25,7 @@
 
 // Time in ms to first messurement (15 min in ms)
 #define SENSOR_GAS_PREHEAT_TIME  900000
+//#define SENSOR_GAS_PREHEAT_TIME  900
 // s (4h)
 #define MAP_RESET_TIME 14400
 #define MAP_RESET_AVG_COUNT 10
