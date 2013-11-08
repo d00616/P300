@@ -79,9 +79,13 @@ void setup() {
   #ifdef LED_PIN
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, HIGH);
+    delay(200);
+    digitalWrite(LED_PIN, LOW);
+    delay(200);
+    digitalWrite(LED_PIN, HIGH);
   #endif
     
-  // Crash -> reboot to boot loader
+// Crash -> reboot to boot loader
   #ifdef EEPROM_CRASHDEDECTION
   if (EEPROM.read(EEPROM_CRASHDEDECTION)<255)
   {
@@ -154,7 +158,7 @@ void setup() {
   p300_volume_flow_rate=2;
  
   // Initialize 1ms timer with watchdog
-  Timer_ms.begin(timerCallbackMs, 1000);
+  Timer_ms.begin(timerCallbackMs, 2000);
   
   // Initialize serial timer
   inCallbackSerial=false;
@@ -178,6 +182,13 @@ void setup() {
   // initialize bitlash and set primary serial port baud
   // print startup banner and run the startup macro
   initBitlash(PC_BAUD_RATE);
+  addBitlashFunction("flash", (bitlash_function) reset_to_bootloader);
+  
+  // wait 5 seconds for manual reset
+  #ifdef SETUP_TIMEOUT
+    while (millis()<(SETUP_TIMEOUT-500)) runBitlash();
+  #endif
+  
   // Bitlash function
   addBitlashFunction("p300help", (bitlash_function) cmd_p300help);
   addBitlashFunction("sensor", (bitlash_function) cmd_sensor);
@@ -187,9 +198,10 @@ void setup() {
   #ifdef DEBUG
     addBitlashFunction("debug", (bitlash_function) cmd_debug);
   #endif
-  addBitlashFunction("flash", (bitlash_function) reset_to_bootloader);
+#if defined(SENSOR_GAS) && SENSOR_GAS >= 1
+  addBitlashFunction("backup", (bitlash_function) cmd_backup);
+#endif
 
-  
   #ifdef LED_PIN
     digitalWrite(LED_PIN, LOW);
   #endif
@@ -233,8 +245,8 @@ numvar cmd_p300help(void)
           "P300 Controller Release=\"" RELEASE "\" Build=\"" __DATE__ " " __TIME__ "\"\r\n"
           "Commands:\r\n"
           "p300help\r\n"
-          "flash\t\tReboot to loader\r\n"
-          "boot\t\tReboot to application\r\n"
+          "boot\tReboot Application\r\n"
+          "flash\t\Reboot to loader\r\n"
          );
         #ifdef DEBUG
           p(
@@ -254,9 +266,12 @@ numvar cmd_p300help(void)
         #endif
   	 p("\tTYPE=7\tS1/S2\r\n\tTYPE=8\tVolume flow rate\r\nclock(VAL)\tread clock 0=second,1=minute,2=hour,3=weekday -> 1=Mon-7=Sun\r\nmodbus(addr[,val])\tread or write word from/to P300 register\r\n\t\t!100,000 EEPROM write cycles available!\r\n\t\tRegister: https://github.com/d00616/P300/wiki/Modbus-Register\r\n");
         #ifdef CALIBRATION_TIME
-	 p("stopmodbus(0|1|2)\tStop modbus communication e.g. for calibartion (2=reset calibration timer)\r\n");
+	 p("stopmodbus(0|1|2)\tStop modbus communication e.g. for calibartion (2=reset P300 calibration timer)\r\n");
         #else
 	 p("stopmodbus(0|1)\tStop modbus communication e.g. for calibartion\r\n");
+        #endif
+        #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
+         p("backup()\tCreate restore script for learned values\r\n");
         #endif
 
   return 0;
@@ -629,7 +644,9 @@ numvar cmd_debug(void)
             p("%3d ", (int)((temp*HT_MAP_DIV_TEMP)+HT_MAP_MIN_TEMP));
             for (uint8_t hum=0; hum<HT_MAP_COUNT_HUM; hum++)
             {
-              p("%6d", (int)gas_sensors[i]->htmap_avg[hum][temp]);
+              uint16_t t = (uint16_t)gas_sensors[i]->htmap_avg[hum][temp];
+              if (t<65535) p("%6d", t);
+                else p(" -----");
             }
             p("\r\n");
           }
@@ -641,6 +658,29 @@ numvar cmd_debug(void)
   return ret;
 }
 #endif
+
+// backup htmap
+#if defined(SENSOR_GAS) && SENSOR_GAS >= 1
+numvar cmd_backup(void)
+{
+  // create backup
+  if (getarg(0)==0)
+  {
+    for (char i=0;i<SENSOR_GAS;i++)
+    {
+      for (uint8_t hum=0; hum<HT_MAP_COUNT_HUM; hum++)
+      {
+        for (uint8_t temp=0; temp<HT_MAP_COUNT_TEMP; temp++)
+        {
+          uint16_t t = (uint16_t)gas_sensors[i]->htmap_avg[hum][temp];
+          if (t<65535) p("backup(%d,%i,%i,%d)", i,hum,temp,t);
+        }
+      }
+    }
+  }
+}
+#endif
+
 
 #ifdef LED_PIN
 void blink(char n)
@@ -662,7 +702,6 @@ void blink(char n)
   }
 }
 #endif
-
 
 void loop()
 {

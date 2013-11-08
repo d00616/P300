@@ -70,11 +70,13 @@ int main()
       {
         lq=gas.getQuality();
 //        if ( (gas.millis_val>1743459) && (gas.millis_val<1743714))
+/*
         {
           cout << gas.millis_val << " " << temp1 << " " << hum1 << " " << gas.analog_val <<  " " << (int)gas.getQuality();
           if (lq<80) cout << " STOP" << endl;
             else cout << " OK" << endl;
         }
+*/
       }
     }
     printhtmap();

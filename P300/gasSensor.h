@@ -18,17 +18,16 @@
 #define HT_MAP_MAX_HUM 100
 #define HT_MAP_COUNT_HUM (uint8_t)((HT_MAP_MAX_HUM-HT_MAP_MIN_HUM)/HT_MAP_DIV_HUM)+1
 
-#define MAX_QUALITY_JUMP 5
-
 // for dedection of fast quality changes (20 per minute)
 #define QUALITY_HISTORY 60
 
 // Time in ms to first messurement (15 min in ms)
-#define SENSOR_GAS_PREHEAT_TIME  900000
-//#define SENSOR_GAS_PREHEAT_TIME  900
+//#define SENSOR_GAS_PREHEAT_TIME  900000
+#define SENSOR_GAS_PREHEAT_TIME  900
 // s (4h)
 #define MAP_RESET_TIME 14400
-#define MAP_RESET_AVG_COUNT 10
+// maximal change of 1/12 with 100% value of map reset time
+#define MAP_RESET_AVG_COUNT 12
 
 #include <inttypes.h>
 
