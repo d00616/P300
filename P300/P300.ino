@@ -673,11 +673,25 @@ numvar cmd_backup(void)
         for (uint8_t temp=0; temp<HT_MAP_COUNT_TEMP; temp++)
         {
           uint16_t t = (uint16_t)gas_sensors[i]->htmap_avg[hum][temp];
-          if (t<65535) p("backup(%d,%i,%i,%d)", i,hum,temp,t);
+          if (t<65535) p("backup(%d,%i,%i,%d)\r\n", i,hum,temp,t);
         }
       }
     }
   }
+    else if (getarg(0)==4)
+    {
+      // Restore values
+      uint8_t s=getarg(1); // sensor
+      if (s>=SENSOR_GAS) return -1;
+      
+      uint8_t hum =getarg(2); // humidity
+      if (hum>=HT_MAP_COUNT_HUM) return -2;
+      
+      uint8_t temp = getarg(3); // temp
+      if (temp>=HT_MAP_COUNT_TEMP) return -3;
+      
+      gas_sensors[s]->htmap_avg[hum][temp]=getarg(4);
+    }
 }
 #endif
 
