@@ -24,10 +24,14 @@
 // Time in ms to first messurement (15 min in ms)
 //#define SENSOR_GAS_PREHEAT_TIME  900000
 #define SENSOR_GAS_PREHEAT_TIME  900
+
 // s (4h)
 #define MAP_RESET_TIME 14400
 // maximal change of 1/12 with 100% value of map reset time
 #define MAP_RESET_AVG_COUNT 12
+
+// sensor variance, 2=doubling analog value
+#define SENSOR_VARIANCE 2
 
 #include <inttypes.h>
 

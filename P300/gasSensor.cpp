@@ -53,7 +53,7 @@ void GasSensor::sethtmap(char temp, char hum, uint16_t val)
   if ((hpos<0) || (hpos>=HT_MAP_COUNT_HUM)) return;
   char tpos = (temp-HT_MAP_MIN_TEMP)/HT_MAP_DIV_TEMP;
   if ((tpos<0) || (tpos>=HT_MAP_COUNT_TEMP)) return;
-  
+
   // höchsten Wert für 100% finden
   if (val<htmap_max[hpos][tpos])
   {
@@ -77,20 +77,6 @@ int8_t GasSensor::getQuality()
 
 int8_t GasSensor::getQualityHistoryDelta()
 {
-/* Old Idea
-  int8_t min=100;
-  int8_t max=0;
-  for (char i=0;i<QUALITY_HISTORY;i++)
-  {
-     if (min>quality_history[i]) min=quality_history[i];
-     if (max<quality_history[i]) max=quality_history[i];
-  }
-  
-  // return a value if quality are increasing
-  if ((quality==min) && (quality<max)) return min-max;
-  if ((quality==max) && (quality>min)) return max-min;
-  return 0; */
-  
   int avg=0;
   for (char i=0;i<QUALITY_HISTORY;i++)
   {
@@ -173,28 +159,34 @@ uint16_t GasSensor::loopAction(char temp, char humidity)
   sethtmap(temp,humidity,tmp);
   
   // Rule check to avoid jumps in table, check actual cell against neighbours
-  int ruleval = htmap_avg[hpos][tpos];
+  int maxval = htmap_avg[hpos][tpos];
   if ( (hpos>0) && (tpos>0) &&  (hpos<HT_MAP_COUNT_HUM-1) && (tpos<HT_MAP_COUNT_TEMP-1))
   {
     // hpos-1 must be less
-    if (htmap_avg[hpos-1][tpos]>ruleval) htmap_avg[hpos-1][tpos]=ruleval;
+    if (htmap_avg[hpos-1][tpos]>maxval) htmap_avg[hpos-1][tpos]=maxval;
     // tpos-1 must be less
-    if (htmap_avg[hpos][tpos-1]>ruleval) htmap_avg[hpos][tpos-1]=ruleval;
+    if (htmap_avg[hpos][tpos-1]>maxval) htmap_avg[hpos][tpos-1]=maxval;
     // hpos-1,tpos-1 must be less
-    if (htmap_avg[hpos-1][tpos-1]>ruleval) htmap_avg[hpos-1][tpos-1]=ruleval;    
+    if (htmap_avg[hpos-1][tpos-1]>maxval) htmap_avg[hpos-1][tpos-1]=maxval;    
     // hpos+1 must be greater
-    if (htmap_avg[hpos+1][tpos]<ruleval) htmap_avg[hpos][tpos-1]=ruleval;
+    if (htmap_avg[hpos+1][tpos]<maxval) htmap_avg[hpos][tpos-1]=maxval;
     // tpos +1 must be greater
-    if (htmap_avg[hpos][tpos+1]<ruleval) htmap_avg[hpos][tpos+1]=ruleval;
+    if (htmap_avg[hpos][tpos+1]<maxval) htmap_avg[hpos][tpos+1]=maxval;
     // hpos+1,tpos +1 must be greater
-    if (htmap_avg[hpos+1][tpos+1]<ruleval) htmap_avg[hpos+1][tpos+1]=ruleval;
+    if (htmap_avg[hpos+1][tpos+1]<maxval) htmap_avg[hpos+1][tpos+1]=maxval;
     // hpos-1,tpos +1 must be greater
-    if (htmap_avg[hpos-1][tpos+1]<ruleval) htmap_avg[hpos-1][tpos+1]=ruleval;
+    if (htmap_avg[hpos-1][tpos+1]<maxval) htmap_avg[hpos-1][tpos+1]=maxval;
     // hpos+1,tpos-1 must be less
-    if (htmap_avg[hpos+1][tpos-1]>ruleval) htmap_avg[hpos+1][tpos-1]=ruleval;
+    if (htmap_avg[hpos+1][tpos-1]>maxval) htmap_avg[hpos+1][tpos-1]=maxval;
   }
 
-  quality = ( (float)ruleval/(float)lval)*100;
+//  quality = ( (float)maxval/(float)lval)*100;
+  float f1 = lval-maxval;
+  if (f1<0) f1=0;
+  float f2 = (maxval*SENSOR_VARIANCE)-maxval;
+  if (f2<0) f2=1;
+  quality = 100-((f1*100)/f2);
+  
   ltmp = temp;
   lhum = humidity;
   
