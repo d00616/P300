@@ -179,8 +179,21 @@ uint16_t GasSensor::loopAction(char temp, char humidity)
     // hpos+1,tpos-1 must be less
     if (htmap_avg[hpos+1][tpos-1]>maxval) htmap_avg[hpos+1][tpos-1]=maxval;
   }
+  
+  // maxval: bilinear interpolation
+  // avoid quality jumping when temp/hum
+  if ( (htmap_avg[hpos][tpos+1]<65535) && (htmap_avg[hpos+1][tpos]<65535) && (htmap_avg[hpos+1][tpos+1]<65535) && (hpos<HT_MAP_COUNT_HUM-2) && (tpos<HT_MAP_COUNT_TEMP-2))
+  {
+      char modulo_temp = (temp-HT_MAP_MIN_TEMP)%HT_MAP_DIV_TEMP;
+      char modulo_hum  = (humidity-HT_MAP_MIN_HUM)%HT_MAP_DIV_HUM;
+      
+      uint16_t temp1 = interpolation(htmap_avg[hpos][tpos],htmap_avg[hpos][tpos+1], modulo_temp, HT_MAP_DIV_TEMP);
+      uint16_t temp2 = interpolation(htmap_avg[hpos+1][tpos],htmap_avg[hpos+1][tpos+1], modulo_temp, HT_MAP_DIV_TEMP);
+      
+      maxval = interpolation(temp1,temp2, modulo_hum, HT_MAP_DIV_HUM);
+  }
 
-//  quality = ( (float)maxval/(float)lval)*100;
+  //  quality = ( (float)maxval/(float)lval)*100;
   float f1 = lval-maxval;
   if (f1<0) f1=0;
   float f2 = (maxval*SENSOR_VARIANCE)-maxval;
@@ -197,3 +210,10 @@ uint16_t GasSensor::loopAction(char temp, char humidity)
   
   return lval;
 }
+
+uint16_t GasSensor::interpolation(uint16_t val1, uint16_t val2, char modulo, char steps)
+{
+    if (val1<val2) return val1+((((float)val2-(float)val1)/(float)steps) * (float)modulo);
+      else return val2+((((float)val1-(float)val2)/(float)steps) * (float)modulo);
+}
+

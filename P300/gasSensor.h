@@ -78,6 +78,7 @@ class GasSensor
    
   private:
    void sethtmap(char,char, uint16_t);
+   uint16_t interpolation(uint16_t, uint16_t, char, char);
     
    
 };
