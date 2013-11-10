@@ -8,7 +8,7 @@
  *
  *
  */
-#define RELEASE "2.1.0"
+#define RELEASE "2.1.0-pre1"
 
 #include "config.h"
 #include <stdarg.h>
