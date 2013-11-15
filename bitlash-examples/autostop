@@ -1,7 +1,7 @@
 // Anhalten der Anlage wenn die Luftqualität unter 75 sinkt
-// oder das 1 Minuten Delta <-6 ist.
-// Die minimale stopzeit betraegt 10 Minuten (200)
-// Die minimale wiederanlaufzeit betraegt 48 Sekunden (16)
+// oder das 3 Minuten Delta <-9 ist.
+// Die minimale Stopzeit betraegt 10 Minuten (200)
+// Die minimale Wiederanlaufzeit betraegt 96 Sekunden (32)
 //
 // Variablen:
 //	s = Stop status
@@ -10,15 +10,14 @@
 //	c = counter
 //
 // Initial function
-function startup {c=0;s=0;run checkair,3000;};
+function startup {c=0;s=0;run checkair,3000;run countstat,60000;};
 // check air qualtiy
-function checkair
-{if(s>0){s--;if(s==16)airstart();}else{t=sensor(6,1);if(((sensor(5,1)<=70)&&(t<=0))||(t<-6)){s=200+16;c++;airstop();}}};
+function checkair {if(s>0){s--;if(s==32)airstart();}else{t=sensor(6,1);if(((sensor(5,1)<=70)&&(t<=0))||(t<-9)){s=200+32;c++;airstop();}}};
 // stop
 function airstop {l=modbus(0);if(l>=0){modbus(0,0);}};
 // start
 function airstart {if(modbus(0)==0){modbus(0,l);}};
 // for watching
-function printquality { print clock(3)," ",clock(2)," ",clock(1)," ",clock(0)," ",sensor(4,1)," ",sensor(5,1)," ",sensor(6,1)," ",modbus(0); };
+function printquality {print clock(3)," ",clock(2)," ",clock(1)," ",clock(0)," ",sensor(4,1)," ",sensor(5,1)," ",sensor(6,1)," ",modbus(0)," ",s;};
 function countstat {if(s>0){y++;}else x++;};
 function pq {print "temp=",sensor(2,1)," hum=",sensor(3,1)," quality=",sensor(5,1)," delta=",sensor(6,1)," analog=",sensor(4,1)," flow=",sensor(8,1);};
