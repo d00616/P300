@@ -8,11 +8,12 @@
  *
  *
  */
-#define RELEASE "2.1.0"
+#define RELEASE "2.1.1"
 
 #include "config.h"
 #include <stdarg.h>
-#include <Wire.h>
+// teensy I2C Library
+#include <i2c_t3.h>
 #include <EEPROM.h>
 #include <IntervalTimer.h>
 #include "bitlash.h"
@@ -48,6 +49,7 @@ uint16_t watchdog_timer;
 #ifdef CALIBRATION_TIME
   uint16_t calibration_timer;
 #endif
+// loop() or timerCallbackSerial()
 bool watchdogsource;
 bool inCallbackSerial;
 bool inReadWriteModbus;
@@ -84,11 +86,17 @@ void setup() {
     delay(200);
     digitalWrite(LED_PIN, HIGH);
   #endif
+  
+  Serial.begin(PC_BAUD_RATE);
+  p("P300 Version %s\r\n", RELEASE);
     
 // Crash -> reboot to boot loader
   #ifdef EEPROM_CRASHDEDECTION
+  p("Start crash dedection: ");
   if (EEPROM.read(EEPROM_CRASHDEDECTION)<255)
   {
+    p("failed. Reset to bootloader.\r\n");
+    Serial.flush();
     #ifdef LED_PIN
      blink(BLINK_SETUP_FAIL);
     #endif
@@ -106,6 +114,7 @@ void setup() {
     EEPROM.write(EEPROM_NEWFIRMWARE,0);
     crashdedection=false;
   }
+  p("OK.\r\n");
   #endif
 
   setupfinished=false;
@@ -116,6 +125,7 @@ void setup() {
   #endif
 
   // Setup serial ports
+  p("Initialize P300 communication: ");
   SERIAL_P300.begin(P300_BAUD_RATE);
   SERIAL_RC.begin(P300_BAUD_RATE);
   crc=ModbusCRC();
@@ -169,27 +179,27 @@ void setup() {
   Timer_clock.begin(timerCallbackClock, 1000000);
 
   // Initialize I2C Bus
-  Wire.begin();
+  p("OK.\r\nInitialize I2C: ");
+  Wire.begin(I2C_MASTER, 0, I2C_PINS_18_19, I2C_PULLUP_EXT, I2C_RATE_100); // Teensy 3.0
+  Wire.setDefaultTimeout(WIRE_TIMEOUT);
+  p("OK\r\n");
   
   // Initialize gas sensors
   #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
     for (char i=0;i<SENSOR_GAS;i++)
     {
+       p("Initialize gas sensor %i ", i);
        gas_sensors[i]=new GasSensor(i, gassensor_pins[i]);
+       p("OK\r\n");
     }
   #endif
   
   // initialize bitlash and set primary serial port baud
   // print startup banner and run the startup macro
+  p("Start bitlash interpreter.\r\n");
   initBitlash(PC_BAUD_RATE);
+  // Bitlash functions
   addBitlashFunction("flash", (bitlash_function) reset_to_bootloader);
-  
-  // wait 5 seconds for manual reset
-  #ifdef SETUP_TIMEOUT
-    while (millis()<(SETUP_TIMEOUT-500)) runBitlash();
-  #endif
-  
-  // Bitlash function
   addBitlashFunction("p300help", (bitlash_function) cmd_p300help);
   addBitlashFunction("sensor", (bitlash_function) cmd_sensor);
   addBitlashFunction("clock", (bitlash_function) cmd_clock);
@@ -199,6 +209,7 @@ void setup() {
     addBitlashFunction("debug", (bitlash_function) cmd_debug);
   #endif
 #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
+  // backup gas sensor statistics
   addBitlashFunction("backup", (bitlash_function) cmd_backup);
 #endif
 
@@ -207,6 +218,7 @@ void setup() {
   #endif
   
   setupfinished=true;
+  p("Setup finished. Version: %s\r\n", RELEASE);
 }
 
 // Reset function
@@ -215,6 +227,8 @@ numvar reset_to_bootloader()
   #ifdef LED_PIN
    digitalWrite(LED_PIN, LOW);
   #endif
+  p("Reboot.\r\n");
+  Serial.flush();
 
   cli();
   delay(100);
@@ -741,13 +755,6 @@ void loop()
         if (debug) p("D Start reading sensors %d\r\n",millis());
       #endif
     
-      #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
-      for (char num_sensor=0;num_sensor<SENSOR_HYT;num_sensor++)
-      {
-        readHYT(hy_addresses[num_sensor], &hy_temp[num_sensor], &hy_humidity[num_sensor]);
-      }
-      #endif
-    
       #if defined(SENSOR_GAS) && SENSOR_GAS >= 1
       // read only when p300 is not stopped
       if (p300_volume_flow_rate>0) for (char i=0;i<SENSOR_GAS;i++)
@@ -758,6 +765,13 @@ void loop()
         #endif
       }
       #endif
+
+      #if defined(SENSOR_HYT) && SENSOR_HYT >= 1
+      for (char num_sensor=0;num_sensor<SENSOR_HYT;num_sensor++)
+      {
+        readHYT(hy_addresses[num_sensor], &hy_temp[num_sensor], &hy_humidity[num_sensor]);
+      }
+      #endif    
 
       #ifdef DEBUG
         if (debug) p("D End reading sensors %d\r\n",millis());
@@ -906,8 +920,8 @@ void readHYT(char address, double *temp, double *humidity)
       if ( (buffer[0]+buffer[1]+buffer[2]+buffer[3])>0)
       {
         // Calculate values
-        *temp = 165.0/pow(2,14)*(buffer[2] << 6 | (buffer[3] & 0x3F))-40;
-        *humidity = 100/pow(2,14)*((buffer[0]<<8 | buffer[1]) & 0X3FFF);
+        *temp = 165.0/pow(2,14)*(double)(buffer[2] << 6 | (buffer[3] & 0x3F))-40;
+        *humidity = 100/pow(2,14)*(double)((buffer[0]<<8 | buffer[1]) & 0X3FFF);
       }
         else
       {
@@ -916,14 +930,11 @@ void readHYT(char address, double *temp, double *humidity)
         *humidity = 50;
       }
       #ifdef DEBUG
-        if(debug) p("D Read from HYT sensor %x temp=%f humidity=%f\r\n",address,*temp,*humidity);
+        if(debug) p("D Read from HYT sensor %x temp=%f humidity=%f\r\n",address,temp,humidity);
       #endif
     }
     #ifdef DEBUG
-      else if(debug)
-    {
-      p("D Error read from HYT sensor %x",address);
-    }
+      else if(debug) p("D Error read from HYT sensor %x\r\n",address);
     #endif
 }
 #endif
@@ -1018,6 +1029,7 @@ void timerCallbackMs() {
     cli();
     blink(BLINK_SETUP_FAIL_TIMEOUT);
     #endif
+    p("Watchdog timeout in setup routine => reboot to bootloader.\r\n");
     reset_to_bootloader();
   }
   
@@ -1029,6 +1041,8 @@ void timerCallbackMs() {
     blink(BLINK_SOFTWARE_WATCHDOG);
     #endif
     // Reset
+    p("Watchdog timeout => reboot.\r\n");
+    Serial.flush();
     reboot();
   }
 }

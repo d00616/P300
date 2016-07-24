@@ -27,10 +27,10 @@
 #define P300_REFRESH_TIME 59
 
 // number of milliseconds for setup routine
-#define SETUP_TIMEOUT 5000
+#define SETUP_TIMEOUT 15000
 
 // timeout for software watchdog
-#define WATCHDOG_TIMEOUT 4000
+#define WATCHDOG_TIMEOUT 10000
 
 // timeout for crash detection
 // not working since bitlash integration
@@ -41,6 +41,9 @@
 #ifdef SENSOR_HYT
   static char hy_addresses[SENSOR_HYT]={0x28};
 #endif
+
+// I2C Timeout in ms
+#define WIRE_TIMEOUT 500
 
 // define analog pins for GAS Sensors
 // Any gas sensor must be installed near HYT sensor with same index number!
